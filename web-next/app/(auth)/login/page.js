@@ -369,7 +369,7 @@ export default function LoginPage() {
         }),
       )
 
-      setTimeout(() => router.replace("/admin/dashboard"), 2000)
+      setTimeout(() => router.replace("/admin/overview"), 2000)
     } catch (error) {
       console.error("Login error:", error)
       let errorMessage = "Login failed. Please check your credentials."
