@@ -4,50 +4,20 @@ import { useState, useEffect, useRef } from "react";
 import { Menu, User, LogOut, X } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
-import { auth, db } from "../config/firebaseConfig.js";
-import { doc, getDoc } from "firebase/firestore";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
-import { useRouter } from "next/navigation";
-import NotificationMobile from "./ui/NotificationMobile.js";
+import { auth } from "../config/firebaseConfig"; // still used for signOut
+import NotificationMobile from "./ui/NotificationMobile";
+import { useUser } from "../context/UserContext"; // 👈 context import
 
 export function Navbar({ mobileSidebarOpen, toggleMobileSidebar }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
-
-  const [userData, setUserData] = useState({
-    username: "",
-    email: "",
-    profileImageUrl: "",
-  });
   const profileRef = useRef(null);
   const pathname = usePathname();
   const router = useRouter();
 
-  useEffect(() => {
-    // Listen for auth state changes
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        try {
-          const docRef = doc(db, "users", user.uid);
-          const docSnap = await getDoc(docRef);
-
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            setUserData({
-              username: data.username || "User",
-              email: user.email || "",
-              profileImageUrl: data.profileImageUrl || "/default.png",
-            });
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-        }
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
+  const { userData, user, loading } = useUser(); // 👈 use global user state
 
   const toggleProfileMenu = () => {
     setProfileOpen((prev) => !prev);
@@ -56,7 +26,7 @@ export function Navbar({ mobileSidebarOpen, toggleMobileSidebar }) {
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-      router.push("/login"); // Redirect to login page after sign out
+      router.push("/login");
     } catch (error) {
       console.error("Error signing out:", error);
     }
@@ -97,6 +67,9 @@ export function Navbar({ mobileSidebarOpen, toggleMobileSidebar }) {
     }
   };
 
+  // Show nothing or a minimal loading bar while context is initializing
+  if (loading) return null;
+
   return (
     <nav className="sticky top-4 z-40 bg-red500">
       <div className="relative container mx-auto">
@@ -104,7 +77,6 @@ export function Navbar({ mobileSidebarOpen, toggleMobileSidebar }) {
         <div className="bg-white border p-4 rounded-2xl shadow flex items-center justify-between">
           {/* left */}
           <div className="flex items-center gap-2 w-full">
-            {/* sidebar button for mobile */}
             <button
               onClick={toggleMobileSidebar}
               className="p-2 hover:bg-gray-300/20 rounded-lg flex lg:hidden"
@@ -116,7 +88,8 @@ export function Navbar({ mobileSidebarOpen, toggleMobileSidebar }) {
               {getPageTitle()}
             </h1>
           </div>
-          {/* Middle */}
+
+          {/* center logo */}
           <div className="flex items-center justify-center w-full">
             <div className="relative rounded-full w-10 h-10 overflow-hidden">
               <Image
@@ -128,9 +101,9 @@ export function Navbar({ mobileSidebarOpen, toggleMobileSidebar }) {
               />
             </div>
           </div>
+
           {/* right */}
           <div className="flex items-center gap-2 justify-end w-full">
-            {/* Notification */}
             <NotificationMobile
               notificationOpen={notificationOpen}
               setNotificationOpen={setNotificationOpen}
@@ -141,21 +114,18 @@ export function Navbar({ mobileSidebarOpen, toggleMobileSidebar }) {
               onClick={toggleProfileMenu}
               className="flex items-center gap-2"
             >
-              {/* name and role */}
               <div className="hidden xl:flex flex-col text-end">
-                <div className="flex flex-col">
-                  <h3 className="font-medium">
-                    {userData.username || "Name here"}
-                  </h3>
-                  <span className="text-gray-500 text-sm">
-                    {userData.email || "name@example.com"}
-                  </span>
-                </div>
+                <h3 className="font-medium">
+                  {userData?.username || "Name here"}
+                </h3>
+                <span className="text-gray-500 text-sm">
+                  {userData?.email || "name@example.com"}
+                </span>
               </div>
-              {/* profile image */}
-              <div className="relative rounded-full w-10 h-10 b-red-500 overflow-hidden">
+
+              <div className="relative rounded-full w-10 h-10 overflow-hidden">
                 <Image
-                  src={userData.profileImageUrl || "/default.png"}
+                  src={userData?.profileImageUrl || "/default.png"}
                   alt="Profile picture"
                   fill
                   className="object-cover"
@@ -166,19 +136,17 @@ export function Navbar({ mobileSidebarOpen, toggleMobileSidebar }) {
           </div>
         </div>
 
-        {/* profile dropdown container */}
+        {/* profile dropdown */}
         {profileOpen && (
           <div
             ref={profileRef}
             className="absolute bg-white rounded-2xl shadow right-0 top-full mt-4 w-72 overflow-hidden border"
           >
-            <div className="flex flex-col gap-4 p-4 ">
-              {/* profile */}
-
+            <div className="flex flex-col gap-4 p-4">
               <div className="flex items-center gap-2">
-                <div className="relative rounded-full w-10 h-10 b-red-500 overflow-hidden">
+                <div className="relative rounded-full w-10 h-10 overflow-hidden">
                   <Image
-                    src={userData.profileImageUrl || "/default.png"}
+                    src={userData?.profileImageUrl || "/default.png"}
                     alt="Profile picture"
                     fill
                     className="object-cover"
@@ -187,17 +155,17 @@ export function Navbar({ mobileSidebarOpen, toggleMobileSidebar }) {
                 </div>
                 <div className="flex flex-col">
                   <h3 className="font-medium">
-                    {userData.username || "Name here"}
+                    {userData?.username || "Name here"}
                   </h3>
                   <span className="text-gray-500 text-sm">
-                    {userData.email || "name@example.com"}
+                    {userData?.email || "name@example.com"}
                   </span>
                 </div>
               </div>
 
               <hr />
 
-              {/* menus */}
+              {/* dropdown links */}
               <div className="flex flex-col">
                 <Link
                   href="/admin/profile"

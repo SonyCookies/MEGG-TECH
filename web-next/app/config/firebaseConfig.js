@@ -1,3 +1,6 @@
+// D:\4THYEAR\CAPSTONE\MEGG\web-next\app\config\firebaseConfig.js
+
+
 // Add the getApps and getMessaging imports
 import { initializeApp, getApps } from "firebase/app"
 import { getAuth } from "firebase/auth"
