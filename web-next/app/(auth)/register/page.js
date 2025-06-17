@@ -1,28 +1,35 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { auth, db } from "../../config/firebaseConfig"
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth"
-import { collection, query, where, getDocs, setDoc, doc } from "firebase/firestore"
-import Image from "next/image"
-import { generateOTP, calculateOTPExpiry } from "../../../app/utils/otp"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { auth, db } from "../../config/firebaseConfig";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  setDoc,
+  doc,
+} from "firebase/firestore";
+import Image from "next/image";
+import { generateOTP, calculateOTPExpiry } from "../../../app/utils/otp";
 
 export default function RegisterPage() {
   const [form, setForm] = useState({
     fullname: "",
     username: "",
-    phone: "", 
+    phone: "",
     email: "",
     password: "",
     confirmPassword: "",
-  })
+  });
 
-  const [errors, setErrors] = useState({})
-  const [globalMessage, setGlobalMessage] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
+  const [errors, setErrors] = useState({});
+  const [globalMessage, setGlobalMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const sendVerificationEmail = async (email, otp) => {
     try {
@@ -32,107 +39,120 @@ export default function RegisterPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, otp }),
-      })
+      });
 
       if (!response.ok) {
-        throw new Error("Failed to send verification email")
+        throw new Error("Failed to send verification email");
       }
     } catch (error) {
-      console.error("Error sending verification email:", error)
-      throw error
+      console.error("Error sending verification email:", error);
+      throw error;
     }
-  }
+  };
 
   // Handle input changes and real-time validation
   const handleInputChange = (e) => {
-    const { name, value } = e.target
-    setForm({ ...form, [name]: value })
-    validateField(name, value)
-  }
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
+    validateField(name, value);
+  };
 
   const validateField = (name, value) => {
-    let errorMsg = ""
+    let errorMsg = "";
 
     switch (name) {
       case "fullname":
-        if (!value) errorMsg = "Full name is required."
-        break
+        if (!value) errorMsg = "Full name is required.";
+        break;
       case "username":
-        if (!value) errorMsg = "Username is required."
-        break
+        if (!value) errorMsg = "Username is required.";
+        break;
       case "email":
-        if (!value) errorMsg = "Email is required."
-        else if (!/\S+@\S+\.\S+/.test(value)) errorMsg = "Invalid email address."
-        break
-        case "phone":
-        if (!value) errorMsg = "Phone number is required."
-        else if (!/^\+?[\d\s-]{10,}$/.test(value)) errorMsg = "Please enter a valid phone number."
-        break
+        if (!value) errorMsg = "Email is required.";
+        else if (!/\S+@\S+\.\S+/.test(value))
+          errorMsg = "Invalid email address.";
+        break;
+      case "phone":
+        if (!value) errorMsg = "Phone number is required.";
+        else if (!/^\+?[\d\s-]{10,}$/.test(value))
+          errorMsg = "Please enter a valid phone number.";
+        break;
       case "password":
-        if (value.length < 8) errorMsg = "Please make the password must be at least 8 characters."
-        break
+        if (value.length < 8)
+          errorMsg = "Please make the password must be at least 8 characters.";
+        break;
       case "confirmPassword":
-        if (value !== form.password) errorMsg = "Passwords do not match."
-        break
+        if (value !== form.password) errorMsg = "Passwords do not match.";
+        break;
       default:
-        break
+        break;
     }
 
-    setErrors((prevErrors) => ({ ...prevErrors, [name]: errorMsg }))
-  }
-  
+    setErrors((prevErrors) => ({ ...prevErrors, [name]: errorMsg }));
+  };
 
   const handleRegister = async (e) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setGlobalMessage("")
+    e.preventDefault();
+    setIsLoading(true);
+    setGlobalMessage("");
 
     // Check for empty fields
-    const emptyFields = Object.entries(form).filter(([key, value]) => value === "")
+    const emptyFields = Object.entries(form).filter(
+      ([key, value]) => value === ""
+    );
     if (emptyFields.length > 0) {
-      setGlobalMessage("Please fill in all fields.")
-      setIsLoading(false)
-      return
+      setGlobalMessage("Please fill in all fields.");
+      setIsLoading(false);
+      return;
     }
 
     // Check if there are any remaining validation errors
-    const hasErrors = Object.values(errors).some((error) => error !== "")
+    const hasErrors = Object.values(errors).some((error) => error !== "");
     if (hasErrors) {
-      setGlobalMessage("Please fix the highlighted errors.")
-      setIsLoading(false)
-      return
+      setGlobalMessage("Please fix the highlighted errors.");
+      setIsLoading(false);
+      return;
     }
 
     try {
       // Check username availability
-      const userRef = collection(db, "users")
-      const usernameQuery = query(userRef, where("username", "==", form.username))
+      const userRef = collection(db, "users");
+      const usernameQuery = query(
+        userRef,
+        where("username", "==", form.username)
+      );
 
       try {
-        const usernameSnapshot = await getDocs(usernameQuery)
+        const usernameSnapshot = await getDocs(usernameQuery);
         if (!usernameSnapshot.empty) {
-          setGlobalMessage("Username already taken.")
-          setIsLoading(false)
-          return
+          setGlobalMessage("Username already taken.");
+          setIsLoading(false);
+          return;
         }
       } catch (error) {
-        console.error("Error checking username:", error)
-        setGlobalMessage("Error checking username availability. Please try again.")
-        setIsLoading(false)
-        return
+        console.error("Error checking username:", error);
+        setGlobalMessage(
+          "Error checking username availability. Please try again."
+        );
+        setIsLoading(false);
+        return;
       }
 
       // Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password)
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        form.email,
+        form.password
+      );
 
       // Generate OTP and expiry time
-      const otp = generateOTP()
-      const otpExpiry = calculateOTPExpiry()
+      const otp = generateOTP();
+      const otpExpiry = calculateOTPExpiry();
 
       // Update user profile
       await updateProfile(userCredential.user, {
         displayName: form.username,
-      })
+      });
 
       // Store user data and OTP in Firestore
       try {
@@ -140,7 +160,7 @@ export default function RegisterPage() {
           fullname: form.fullname,
           username: form.username,
           email: form.email,
-          phone:form.phone,
+          phone: form.phone,
           createdAt: new Date().toISOString(),
           lastLogin: new Date().toISOString(),
           uid: userCredential.user.uid,
@@ -148,49 +168,55 @@ export default function RegisterPage() {
           verificationOTP: otp,
           otpExpiry: otpExpiry,
           deviceId: auth.currentUser?.uid || "unknown", // Add device ID tracking
-        })
+        });
 
-     
+        await sendVerificationEmail(form.email, otp);
 
-        await sendVerificationEmail(form.email, otp)
-
-        setGlobalMessage("Account created! Please check your email for verification.")
-        setTimeout(() => router.push(`/verify?email=${form.email}`), 2000)
+        setGlobalMessage(
+          "Account created! Please check your email for verification."
+        );
+        setTimeout(() => router.push(`/verify?email=${form.email}`), 2000);
       } catch (error) {
-        console.error("Error saving user data:", error)
+        console.error("Error saving user data:", error);
         // Clean up by deleting the auth user if Firestore save fails
         try {
-          await userCredential.user.delete()
+          await userCredential.user.delete();
         } catch (deleteError) {
-          console.error("Error deleting auth user:", deleteError)
+          console.error("Error deleting auth user:", deleteError);
         }
-        throw new Error("Failed to save user data. Please try again.")
+        throw new Error("Failed to save user data. Please try again.");
       }
     } catch (error) {
-      let errorMessage = "Registration failed. Please try again."
+      let errorMessage = "Registration failed. Please try again.";
 
       if (error.code === "auth/email-already-in-use") {
-        errorMessage = "Email already registered. Please use a different email."
+        errorMessage =
+          "Email already registered. Please use a different email.";
       } else if (error.code === "auth/invalid-email") {
-        errorMessage = "Invalid email address."
+        errorMessage = "Invalid email address.";
       } else if (error.code === "auth/operation-not-allowed") {
-        errorMessage = "Email/password registration is not enabled."
+        errorMessage = "Email/password registration is not enabled.";
       } else if (error.code === "auth/weak-password") {
-        errorMessage = "Password is too weak."
+        errorMessage = "Password is too weak.";
       }
 
-      setGlobalMessage(errorMessage)
-      console.error("Registration error:", error)
+      setGlobalMessage(errorMessage);
+      console.error("Registration error:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gray-300/10 flex flex-col items-center justify-center sm:p-8">
-      <div className="bg-white shadow sm:border w-full sm:max-w-lg md:max-w-xl xl:max-w-6xl min-h-screen sm:min-h-[700px] flex flex-col xl:flex-row sm:rounded-2xl overflow-hidden">
+      <div className="bg-white shadow sm:border w-full sm:max-w-lg md:max-w-xl xl:max-w-6xl min-h-screen sm:min-h-[750px] flex flex-col xl:flex-row sm:rounded-2xl overflow-hidden">
         <div className="w-full h-[200px] xl:h-auto relative">
-          <Image src="/login_bg_mobile.svg" alt="Login Background" fill className="object-cover flex xl:hidden" />
+          <Image
+            src="/login_bg_mobile.svg"
+            alt="Login Background"
+            fill
+            className="object-cover flex xl:hidden"
+          />
 
           <Image
             src="/login_bg_screen.svg"
@@ -200,8 +226,14 @@ export default function RegisterPage() {
           />
         </div>
         <div className="relative w-full p-8 xl:place-content-center bg-geen-500 flex flex-col flex-1 xl:flex-auto bg-white">
-          <div className="flex flex-col gap-8 items-center justify-center">
-            <div className={`text-2xl font-semibold ${globalMessage ? "mb-0" : "mb-4"}`}>Create your account</div>
+          <div className="flex flex-col gap-6 items-center justify-center">
+            <div
+              className={`text-2xl font-semibold ${
+                globalMessage ? "mb-0" : "mb-2"
+              }`}
+            >
+              Create your account
+            </div>
 
             {/* Global validation message */}
             {globalMessage && (
@@ -216,7 +248,10 @@ export default function RegisterPage() {
               </div>
             )}
 
-            <form onSubmit={handleRegister} className="flex flex-col gap-8 w-full sm:w-3/4">
+            <form
+              onSubmit={handleRegister}
+              className="flex flex-col gap-6 w-full sm:w-3/4"
+            >
               <div className="grid grid-cols-2 gap-6">
                 <div className="col-span-2 xl:col-span-1 flex flex-col gap-1">
                   <label htmlFor="fullname">Full name</label>
@@ -229,7 +264,11 @@ export default function RegisterPage() {
                     onChange={handleInputChange}
                     disabled={isLoading}
                   />
-                  {errors.fullname && <span className="text-red-500 text-sm">{errors.fullname}</span>}
+                  {errors.fullname && (
+                    <span className="text-red-500 text-sm">
+                      {errors.fullname}
+                    </span>
+                  )}
                 </div>
 
                 <div className="col-span-2 xl:col-span-1 flex flex-col gap-1">
@@ -243,7 +282,11 @@ export default function RegisterPage() {
                     onChange={handleInputChange}
                     disabled={isLoading}
                   />
-                  {errors.username && <span className="text-red-500 text-sm">{errors.username}</span>}
+                  {errors.username && (
+                    <span className="text-red-500 text-sm">
+                      {errors.username}
+                    </span>
+                  )}
                 </div>
 
                 <div className="col-span-2 flex flex-col gap-1">
@@ -257,7 +300,9 @@ export default function RegisterPage() {
                     onChange={handleInputChange}
                     disabled={isLoading}
                   />
-                  {errors.email && <span className="text-red-500 text-sm">{errors.email}</span>}
+                  {errors.email && (
+                    <span className="text-red-500 text-sm">{errors.email}</span>
+                  )}
                 </div>
 
                 <div className="col-span-2 flex flex-col gap-1">
@@ -271,9 +316,10 @@ export default function RegisterPage() {
                     onChange={handleInputChange}
                     disabled={isLoading}
                   />
-                  {errors.phone && <span className="text-red-500 text-sm">{errors.phone}</span>}
+                  {errors.phone && (
+                    <span className="text-red-500 text-sm">{errors.phone}</span>
+                  )}
                 </div>
-
 
                 <div className="col-span-2 flex flex-col gap-1">
                   <label htmlFor="password">Password</label>
@@ -286,7 +332,11 @@ export default function RegisterPage() {
                     onChange={handleInputChange}
                     disabled={isLoading}
                   />
-                  {errors.password && <span className="text-red-500 text-sm">{errors.password}</span>}
+                  {errors.password && (
+                    <span className="text-red-500 text-sm">
+                      {errors.password}
+                    </span>
+                  )}
                 </div>
 
                 <div className="col-span-2 flex flex-col gap-1">
@@ -300,11 +350,15 @@ export default function RegisterPage() {
                     onChange={handleInputChange}
                     disabled={isLoading}
                   />
-                  {errors.confirmPassword && <span className="text-red-500 text-sm">{errors.confirmPassword}</span>}
+                  {errors.confirmPassword && (
+                    <span className="text-red-500 text-sm">
+                      {errors.confirmPassword}
+                    </span>
+                  )}
                 </div>
               </div>
 
-              <div className="flex flex-col gap-4 items-center my-2">
+              <div className="flex flex-col gap-4 items-center ">
                 <button
                   type="submit"
                   className="px-4 py-2 rounded-2xl w-full bg-blue-500 text-white transition-colors duration-150 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed"
@@ -318,7 +372,7 @@ export default function RegisterPage() {
                     href="/login"
                     className="text-blue-500 hover:underline hover:underline-offset-8 transition-transform duration-150"
                   >
-                           Sign in
+                    Sign in
                   </Link>
                 </span>
               </div>
@@ -327,6 +381,5 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
-
