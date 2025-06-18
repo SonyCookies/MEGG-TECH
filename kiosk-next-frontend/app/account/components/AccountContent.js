@@ -1,8 +1,8 @@
-"use client";
+"use client"
 
-import { useEffect, useState, useCallback } from "react";
-import QRCode from "react-qr-code";
-import { createPortal } from "react-dom";
+import { useEffect, useState, useCallback } from "react"
+import QRCode from "react-qr-code"
+import { createPortal } from "react-dom"
 import {
   QrCodeIcon as QrIcon,
   Info,
@@ -19,26 +19,19 @@ import {
   ChevronRight,
   User,
   X,
-} from "lucide-react";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
-import { db } from "../../libs/firebaseConfig";
-import {
-  generateLinkToken,
-  initializeMachineLink,
-} from "../utils/machine-link";
-import { addAccessLog } from "../utils/logging";
+} from "lucide-react"
+import { doc, updateDoc, getDoc } from "firebase/firestore"
+import { db } from "../../libs/firebaseConfig"
+import { generateLinkToken, initializeMachineLink } from "../utils/machine-link"
+import { addAccessLog } from "../utils/logging"
 
-// Add this keyframe animation
 const fadeInKeyframes = `
   @keyframes fadeIn {
     from { opacity: 0; transform: scale(0.95); }
     to { opacity: 1; transform: scale(1); }
   }
-`;
+`
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Skeleton placeholder for initial loading
-// ─────────────────────────────────────────────────────────────────────────────
 function SkeletonCard() {
   return (
     <div className="h-full bg-white/10 backdrop-blur-sm rounded-lg p-4 flex flex-col animate-pulse">
@@ -55,12 +48,9 @@ function SkeletonCard() {
         ))}
       </div>
     </div>
-  );
+  )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Card components
-// ─────────────────────────────────────────────────────────────────────────────
 function BasicInfoCard({ machineDetails = {}, machineId }) {
   return (
     <div className="h-full bg-white/10 backdrop-blur-sm rounded-lg p-4 flex flex-col border border-white/10">
@@ -68,9 +58,7 @@ function BasicInfoCard({ machineDetails = {}, machineId }) {
         <h3 className="text-lg font-semibold text-white flex items-center gap-2">
           <Info className="w-5 h-5 text-cyan-300" /> Basic Information
         </h3>
-        <p className="text-sm text-white/70">
-          Machine details and configuration
-        </p>
+        <p className="text-sm text-white/70">Machine details and configuration</p>
       </div>
       <div className="grid grid-cols-2 gap-4 flex-1">
         {[
@@ -88,22 +76,20 @@ function BasicInfoCard({ machineDetails = {}, machineId }) {
             ) : machineDetails[field] ? (
               <p className="font-medium text-white">{machineDetails[field]}</p>
             ) : (
-              <p className="italic text-white/50">
-                No {label.toLowerCase()} added
-              </p>
+              <p className="italic text-white/50">No {label.toLowerCase()} added</p>
             )}
           </div>
         ))}
       </div>
     </div>
-  );
+  )
 }
 
 function OwnerDetailsCard({ linkStatus, formatDate }) {
   const fields = [
     {
       label: "Owner Name",
-      value: linkStatus.linkedUser?.name,
+      value: linkStatus.linkedUser?.name || linkStatus.linkedUser?.fullname || linkStatus.linkedUser?.username,
       icon: User,
     },
     {
@@ -121,7 +107,7 @@ function OwnerDetailsCard({ linkStatus, formatDate }) {
       value: linkStatus.isLinked ? "Connected" : "Not Connected",
       icon: linkStatus.isLinked ? Wifi : WifiOff,
     },
-  ];
+  ]
 
   return (
     <div className="h-full bg-white/10 backdrop-blur-sm rounded-lg p-4 flex flex-col border border-white/10">
@@ -140,38 +126,27 @@ function OwnerDetailsCard({ linkStatus, formatDate }) {
             {value ? (
               <p className="font-medium text-white">{value}</p>
             ) : (
-              <p className="italic text-white/50">
-                No {label.toLowerCase()} added
-              </p>
+              <p className="italic text-white/50">No {label.toLowerCase()} available</p>
             )}
           </div>
         ))}
       </div>
     </div>
-  );
+  )
 }
 
-function QRCodeCard({
-  linkStatus,
-  qrCodeData,
-  generatingQR,
-  generateQRCode,
-  handleDownloadQR,
-  formatDate,
-}) {
-  const [isModalOpen, setModalOpen] = useState(false);
+function QRCodeCard({ linkStatus, qrCodeData, generatingQR, generateQRCode, handleDownloadQR, formatDate }) {
+  const [isModalOpen, setModalOpen] = useState(false)
 
   useEffect(() => {
     if (!document.getElementById("qr-animations")) {
-      const style = document.createElement("style");
-      style.id = "qr-animations";
-      style.textContent = fadeInKeyframes;
-      document.head.appendChild(style);
-      return () => {
-        document.head.removeChild(style);
-      };
+      const style = document.createElement("style")
+      style.id = "qr-animations"
+      style.textContent = fadeInKeyframes
+      document.head.appendChild(style)
+      return () => document.head.removeChild(style)
     }
-  }, []);
+  }, [])
 
   return (
     <div className="h-full bg-white/10 backdrop-blur-sm rounded-lg p-4 flex flex-col border border-white/10">
@@ -181,17 +156,15 @@ function QRCodeCard({
         </h3>
         <p className="text-sm text-white/70">Machine linking information</p>
       </div>
-
       <div className="flex flex-1">
+        {/* Left pane: QR or status */}
         <div className="w-1/2 flex items-center justify-center">
           {linkStatus.isLinked ? (
             <div className="flex flex-col items-center">
               <div className="w-20 h-20 bg-white/20 rounded-lg flex items-center justify-center">
                 <QrIcon className="w-12 h-12 text-white/70" />
               </div>
-              <p className="text-sm text-white/70 mt-2">
-                Machine already linked
-              </p>
+              <p className="text-sm text-white/70 mt-2">Machine already linked</p>
             </div>
           ) : qrCodeData ? (
             <div
@@ -219,6 +192,7 @@ function QRCodeCard({
           )}
         </div>
 
+        {/* Right pane: metadata + download/refresh */}
         <div className="w-1/2 flex flex-col justify-start pl-6">
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
@@ -226,36 +200,20 @@ function QRCodeCard({
                 <QrIcon className="w-4 h-4 text-cyan-300" /> Machine ID
               </label>
               <p className="font-medium text-sm text-white break-all">
-                {qrCodeData?.id ?? (
-                  <span className="italic text-white/50">No ID</span>
-                )}
+                {qrCodeData?.id ?? <span className="italic text-white/50">No ID</span>}
               </p>
             </div>
-
             <div className="space-y-1">
               <label className="text-sm text-white/70 flex items-center gap-2">
                 <RefreshCw className="w-4 h-4 text-cyan-300" /> Generated
               </label>
-              <p className="font-medium text-sm text-white">
-                {qrCodeData ? (
-                  formatDate(qrCodeData.timestamp)
-                ) : (
-                  <span className="italic text-white/50">—</span>
-                )}
-              </p>
+              <p className="font-medium text-sm text-white">{qrCodeData ? formatDate(qrCodeData.timestamp) : "—"}</p>
             </div>
-
             <div className="space-y-1 col-span-2">
               <label className="text-sm text-white/70 flex items-center gap-2">
                 <Info className="w-4 h-4 text-cyan-300" /> Expires
               </label>
-              <p className="font-medium text-sm text-white">
-                {qrCodeData ? (
-                  formatDate(qrCodeData.expiresAt)
-                ) : (
-                  <span className="italic text-white/50">—</span>
-                )}
-              </p>
+              <p className="font-medium text-sm text-white">{qrCodeData ? formatDate(qrCodeData.expiresAt) : "—"}</p>
             </div>
           </div>
 
@@ -281,7 +239,7 @@ function QRCodeCard({
         </div>
       </div>
 
-      {/* Full-screen modal for enlarged QR */}
+      {/* full-screen modal */}
       {isModalOpen &&
         createPortal(
           <div
@@ -301,22 +259,15 @@ function QRCodeCard({
                 <X className="w-5 h-5" />
               </button>
               <div className="p-2">
-                <QRCode
-                  value={JSON.stringify(qrCodeData)}
-                  size={300}
-                  level="H"
-                  viewBox="0 0 256 256"
-                />
+                <QRCode value={JSON.stringify(qrCodeData)} size={300} level="H" viewBox="0 0 256 256" />
               </div>
-              <div className="mt-4 text-center text-gray-700 text-sm">
-                Click anywhere outside to close
-              </div>
+              <div className="mt-4 text-center text-gray-700 text-sm">Click anywhere outside to close</div>
             </div>
           </div>,
-          document.body
+          document.body,
         )}
     </div>
-  );
+  )
 }
 
 function ConnectionStatusCard({ linkStatus, formatDate }) {
@@ -328,7 +279,6 @@ function ConnectionStatusCard({ linkStatus, formatDate }) {
         </h3>
         <p className="text-sm text-white/70">Machine connection information</p>
       </div>
-
       <div className="flex-1 flex flex-col items-center justify-center">
         {linkStatus.isLinked ? (
           <>
@@ -336,16 +286,14 @@ function ConnectionStatusCard({ linkStatus, formatDate }) {
               <Wifi className="w-8 h-8 text-green-400" />
             </div>
             <p className="text-green-400 font-bold text-lg">Connected</p>
-            <p className="text-sm text-white/70 mt-1">
-              Since {formatDate(linkStatus.linkTime)}
-            </p>
-            {linkStatus.linkedUser?.name && (
+            <p className="text-sm text-white/70 mt-1">Since {formatDate(linkStatus.linkTime)}</p>
+            {(linkStatus.linkedUser?.name || linkStatus.linkedUser?.fullname || linkStatus.linkedUser?.username) && (
               <div className="mt-4 text-center">
                 <p className="text-sm text-white/70">Connected User</p>
                 <div className="flex items-center justify-center gap-2 mt-1">
                   <User className="w-4 h-4 text-cyan-300" />
                   <p className="font-medium text-white">
-                    {linkStatus.linkedUser.name}
+                    {linkStatus.linkedUser.name || linkStatus.linkedUser.fullname || linkStatus.linkedUser.username}
                   </p>
                 </div>
               </div>
@@ -357,208 +305,212 @@ function ConnectionStatusCard({ linkStatus, formatDate }) {
               <WifiOff className="w-8 h-8 text-white/70" />
             </div>
             <p className="text-white/80 font-medium text-lg">Not connected</p>
-            <p className="text-sm text-white/60 mt-1">
-              Generate a QR code to connect this machine
-            </p>
+            <p className="text-sm text-white/60 mt-1">Generate a QR code to connect this machine</p>
           </>
         )}
       </div>
     </div>
-  );
+  )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main component
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function AccountContent() {
-  const [loading, setLoading] = useState(true);
-  const [machineDetails, setMachineDetails] = useState(null);
-  const [machineId, setMachineId] = useState(null);
-  const [qrCodeData, setQrCodeData] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedDetails, setEditedDetails] = useState({});
-  const [saveError, setSaveError] = useState("");
-  const [saveSuccess, setSaveSuccess] = useState("");
-  const [generatingQR, setGeneratingQR] = useState(false);
-  const [linkStatus, setLinkStatus] = useState({ isLinked: false });
-  const [currentCard, setCurrentCard] = useState(0);
+  const [loading, setLoading] = useState(true)
+  const [machineDetails, setMachineDetails] = useState(null)
+  const [machineId, setMachineId] = useState(null)
+  const [qrCodeData, setQrCodeData] = useState(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editedDetails, setEditedDetails] = useState({})
+  const [saveError, setSaveError] = useState("")
+  const [saveSuccess, setSaveSuccess] = useState("")
+  const [generatingQR, setGeneratingQR] = useState(false)
+  const [linkStatus, setLinkStatus] = useState({ isLinked: false })
+  const [currentCard, setCurrentCard] = useState(0)
 
   const cards = [
     { id: "basic", label: "Basic Info", icon: Info, component: BasicInfoCard },
-    {
-      id: "owner",
-      label: "Owner Details",
-      icon: User,
-      component: OwnerDetailsCard,
-    },
+    { id: "owner", label: "Owner Details", icon: User, component: OwnerDetailsCard },
     { id: "qr", label: "QR Code", icon: QrIcon, component: QRCodeCard },
-    {
-      id: "status",
-      label: "Connection Status",
-      icon: Link,
-      component: ConnectionStatusCard,
-    },
-  ];
+    { id: "status", label: "Connection Status", icon: Link, component: ConnectionStatusCard },
+  ]
 
-  const nextCard = () => setCurrentCard((i) => (i + 1) % cards.length);
-  const prevCard = () =>
-    setCurrentCard((i) => (i - 1 + cards.length) % cards.length);
-  const goToCard = (i) => setCurrentCard(i);
+  const nextCard = () => setCurrentCard((i) => (i + 1) % cards.length)
+  const prevCard = () => setCurrentCard((i) => (i - 1 + cards.length) % cards.length)
+  const goToCard = (i) => setCurrentCard(i)
 
-  // Generate QR
   const generateQRCodeFn = useCallback(async () => {
-    if (machineDetails && machineId) {
-      setGeneratingQR(true);
-      try {
-        const { token, expiresAt } = await generateLinkToken(machineId);
-        setQrCodeData({
-          id: machineId,
-          name: machineDetails.name,
-          serialNumber: machineDetails.serialNumber,
-          timestamp: new Date().toISOString(),
-          linkToken: token,
-          expiresAt,
-        });
-      } finally {
-        setGeneratingQR(false);
-      }
+    if (!machineDetails || !machineId) return
+    setGeneratingQR(true)
+    try {
+      const { token, expiresAt } = await generateLinkToken(machineId)
+      setQrCodeData({
+        id: machineId,
+        name: machineDetails.name,
+        serialNumber: machineDetails.serialNumber,
+        timestamp: new Date().toISOString(),
+        linkToken: token,
+        expiresAt,
+      })
+    } finally {
+      setGeneratingQR(false)
     }
-  }, [machineDetails, machineId]);
+  }, [machineDetails, machineId])
 
-  // Fetch session & details
+  // ── Initial load + linkStatus population with enhanced debugging ────────────────
   useEffect(() => {
-    let unsub;
-    (async () => {
+    let unsub
+    ;(async () => {
       try {
-        const s = await fetch("/api/auth/session").then((r) => r.json());
-        if (!s.machineId) throw new Error("No session");
-        setMachineId(s.machineId);
-        const m = await fetch(`/api/machines/${s.machineId}`).then((r) =>
-          r.json()
-        );
-        setMachineDetails(m.machine);
-        setEditedDetails(m.machine);
-        unsub = initializeMachineLink(s.machineId, setLinkStatus);
+        // 1) session
+        const s = await fetch("/api/auth/session").then((r) => r.json())
+        if (!s.machineId) throw new Error("No session")
+        setMachineId(s.machineId)
+
+        // 2) machine doc
+        const machineSnap = await getDoc(doc(db, "machines", s.machineId))
+        if (!machineSnap.exists()) throw new Error("Machine not found")
+        const m = machineSnap.data()
+        setMachineDetails(m)
+        setEditedDetails(m)
+
+        // 3) seed linkStatus with enhanced user data fetching
+        const usersMap = m.linkedUsers || {}
+        const [uid, info] = Object.entries(usersMap)[0] || []
+
+        if (uid) {
+          const uSnap = await getDoc(doc(db, "users", uid))
+
+          if (uSnap.exists()) {
+            const ud = uSnap.data()
+
+            // Try multiple possible name fields
+            const userName = ud.fullname || ud.username || ud.displayName || ud.name || "Unknown User"
+
+            const newStatus = {
+              isLinked: true,
+              linkedUser: {
+                uid,
+                name: userName,
+                fullname: ud.fullname,
+                username: ud.username,
+                displayName: ud.displayName,
+                email: ud.email || "",
+              },
+              linkTime: info.linkedAt,
+            }
+            setLinkStatus(newStatus)
+          } else {
+            // Set a partial status indicating the link exists but user data is missing
+            setLinkStatus({
+              isLinked: true,
+              linkedUser: {
+                uid,
+                name: "User data not found",
+                email: "",
+              },
+              linkTime: info.linkedAt,
+            })
+          }
+        }
+
+        // 4) real-time listener (merge delta fields)
+        const realTimeUpdater = (status) => {
+          setLinkStatus((prev) => {
+            const updated = {
+              ...prev,
+              ...status,
+              linkedUser: status.linkedUser
+                ? {
+                    ...prev.linkedUser,
+                    ...status.linkedUser,
+                  }
+                : prev.linkedUser,
+            }
+            return updated
+          })
+        }
+        unsub = initializeMachineLink(s.machineId, realTimeUpdater)
       } catch (e) {
-        console.error(e);
+        console.error("[AccountContent] fetch error:", e)
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    })();
-    return () => unsub?.();
-  }, []);
+    })()
 
-  // Fallback link status
-  useEffect(() => {
-    (async () => {
-      if (!machineId || linkStatus.isLinked) return;
-      try {
-        const snap = await getDoc(doc(db, "machines", machineId));
-        if (!snap.exists()) return;
-        const users = snap.data().linkedUsers || {};
-        const [uid, info] = Object.entries(users)[0] || [];
-        if (!uid) return;
-        let ud = { fullname: "Unknown", email: "" };
-        try {
-          const us = await getDoc(doc(db, "users", uid));
-          if (us.exists()) ud = us.data();
-        } catch {}
-        setLinkStatus({
-          isLinked: true,
-          linkedUser: {
-            uid,
-            name: ud.fullname || ud.displayName,
-            email: ud.email,
-          },
-          linkTime: info.linkedAt,
-        });
-      } catch (e) {
-        console.error(e);
-      }
-    })();
-  }, [machineId, linkStatus.isLinked]);
+    return () => unsub?.()
+  }, [])
 
-  const handleEdit = () => setIsEditing(true);
+  const handleEdit = () => setIsEditing(true)
   const handleCancel = () => {
-    setIsEditing(false);
-    setSaveError("");
-    setSaveSuccess("");
-  };
-  const handleInputChange = (field, value) =>
-    setEditedDetails((d) => ({ ...d, [field]: value }));
+    setIsEditing(false)
+    setSaveError("")
+    setSaveSuccess("")
+  }
+  const handleInputChange = (field, value) => setEditedDetails((d) => ({ ...d, [field]: value }))
   const handleSave = async () => {
     try {
-      setSaveError("");
-      setSaveSuccess("");
+      setSaveError("")
+      setSaveSuccess("")
       await updateDoc(doc(db, "machines", machineId), {
         ...editedDetails,
         updatedAt: new Date().toISOString(),
-      });
+      })
       await addAccessLog({
         action: "machine_update",
         machineId,
         status: "success",
         details: "Updated",
-      });
-      setMachineDetails(editedDetails);
-      setIsEditing(false);
-      setSaveSuccess("Saved");
+      })
+      setMachineDetails(editedDetails)
+      setIsEditing(false)
+      setSaveSuccess("Saved")
     } catch (e) {
-      console.error(e);
-      setSaveError(e.message || "Error");
+      console.error(e)
+      setSaveError(e.message || "Error")
     }
-  };
-  const handleDownloadQR = () => {
-    const svg = document.getElementById("machine-qr-code");
-    if (!svg) return;
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    const img = new Image();
-    const data = new XMLSerializer().serializeToString(svg);
-    const url = URL.createObjectURL(
-      new Blob([data], { type: "image/svg+xml" })
-    );
-    canvas.width = canvas.height = 1000;
-    img.onload = () => {
-      ctx.fillStyle = "white";
-      ctx.fillRect(0, 0, 1000, 1000);
-      ctx.drawImage(img, 0, 0, 1000, 1000);
-      const png = canvas.toDataURL("image/png");
-      const a = document.createElement("a");
-      a.href = png;
-      a.download = `machine-qr-${machineId}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-    };
-    img.crossOrigin = "anonymous";
-    img.src = url;
-  };
-  const formatDate = (ds) => {
-    if (!ds) return "N/A";
-    if (ds.toDate) return ds.toDate().toLocaleString();
-    if (ds.seconds) return new Date(ds.seconds * 1000).toLocaleString();
-    return new Date(ds).toLocaleString();
-  };
-
-  // skeleton instead of spinner
-  if (loading) {
-    return <SkeletonCard />;
   }
+
+  const handleDownloadQR = () => {
+    const svg = document.getElementById("machine-qr-code")
+    if (!svg) return
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")
+    const img = new Image()
+    const data = new XMLSerializer().serializeToString(svg)
+    const url = URL.createObjectURL(new Blob([data], { type: "image/svg+xml" }))
+    canvas.width = canvas.height = 1000
+    img.onload = () => {
+      ctx.fillStyle = "white"
+      ctx.fillRect(0, 0, 1000, 1000)
+      ctx.drawImage(img, 0, 0, 1000, 1000)
+      const png = canvas.toDataURL("image/png")
+      const a = document.createElement("a")
+      a.href = png
+      a.download = `machine-qr-${machineId}.png`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+    img.crossOrigin = "anonymous"
+    img.src = url
+  }
+
+  const formatDate = (ds) => {
+    if (!ds) return "N/A"
+    if (ds.toDate) return ds.toDate().toLocaleString()
+    if (ds.seconds) return new Date(ds.seconds * 1000).toLocaleString()
+    return new Date(ds).toLocaleString()
+  }
+
+  if (loading) return <SkeletonCard />
 
   return (
     <div className="h-full flex flex-col max-h-[380px]">
-      {/* Carousel content */}
       <div className="flex-1 overflow-hidden">
         <div
           className="flex h-full transition-transform duration-300"
           style={{ transform: `translateX(-${currentCard * 100}%)` }}
         >
           {cards.map(({ id, component: C }) => (
-            <div
-              key={id}
-              className="w-full flex-shrink-0 p-4 h-full box-border overflow-auto"
-            >
+            <div key={id} className="w-full flex-shrink-0 p-4 h-full box-border overflow-auto">
               <C
                 machineDetails={machineDetails}
                 machineId={machineId}
@@ -582,7 +534,6 @@ export default function AccountContent() {
         </div>
       </div>
 
-      {/* Footer */}
       <div className="px-4 py-3 border-t border-white/10 bg-white/5 backdrop-blur-sm flex items-center justify-between">
         <div className="flex gap-2">
           <button
@@ -602,17 +553,15 @@ export default function AccountContent() {
           {currentCard + 1} / {cards.length}
         </div>
         <div className="flex gap-1">
-          {cards.map((card, i) => (
+          {cards.map((_, i) => (
             <button
               key={i}
               onClick={() => goToCard(i)}
-              className={`w-2 h-2 rounded-full ${
-                i === currentCard ? "bg-cyan-300" : "bg-white/30"
-              }`}
+              className={`w-2 h-2 rounded-full ${i === currentCard ? "bg-cyan-300" : "bg-white/30"}`}
             />
           ))}
         </div>
       </div>
     </div>
-  );
+  )
 }
