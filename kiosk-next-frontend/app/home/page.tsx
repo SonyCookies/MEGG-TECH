@@ -1,17 +1,10 @@
-// app/page.tsx
+// D:\4THYEAR\CAPSTONE\MEGG\kiosk-next-frontend\app\home\page.tsx
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import {
-  Wifi,
-  WifiOff,
-  Plug,
-  PlugIcon as PlugOff,
-  Sun,
-  Moon,
-} from "lucide-react"
+import { Wifi, WifiOff, Plug, PlugIcon as PlugOff, Sun, Moon } from "lucide-react"
 import { useWebSocket, useInternetConnection } from "../contexts/NetworkContext"
 import StatusIndicator from "./components/status-indicator"
 import NavigationCard from "./components/navigation-card"
@@ -22,10 +15,14 @@ export default function Home() {
   const { readyState } = useWebSocket()
   const isOnline = useInternetConnection()
 
-  const [currentTime, setCurrentTime] = useState(new Date())
-  const [isDaytime, setIsDaytime] = useState(true)
+  const [timeState, setTimeState] = useState(() => {
+    const now = new Date()
+    return {
+      currentTime: now,
+      isDaytime: now.getHours() >= 6 && now.getHours() < 18,
+    }
+  })
 
-  // navigation + loading state
   const [isNavigating, setIsNavigating] = useState(false)
   const [navigationContext, setNavigationContext] = useState({
     title: "",
@@ -33,81 +30,51 @@ export default function Home() {
     destination: "",
   })
 
-  // update clock & daytime flag every minute
   useEffect(() => {
-    const update = () => {
+    const interval = setInterval(() => {
       const now = new Date()
-      setCurrentTime(now)
-      const h = now.getHours()
-      setIsDaytime(h >= 6 && h < 18)
-    }
-    update()
-    const timer = setInterval(update, 60_000)
-    return () => clearInterval(timer)
+      setTimeState({
+        currentTime: now,
+        isDaytime: now.getHours() >= 6 && now.getHours() < 18,
+      })
+    }, 60_000)
+
+    return () => clearInterval(interval)
   }, [])
 
-  // inject keyframes once, cleanup returns void
-  useEffect(() => {
-    const style = document.createElement("style")
-    style.textContent = `
-      @keyframes scanline {
-        0% { transform: translateY(-100%); }
-        100% { transform: translateY(100%); }
-      }
-      @keyframes flicker {
-        0%,100% { opacity: 0.8; }
-        50% { opacity: 1; }
-      }
-    `
-    document.head.appendChild(style)
-    return () => {
-      document.head.removeChild(style)
-    }
-  }, [])
+  const formattedTime = useMemo(() => {
+    return timeState.currentTime.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })
+  }, [timeState.currentTime])
 
-  const formattedTime = currentTime.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  })
+  const navigationCards = useMemo(() => [
+    { href: "/detection", icon: "/Icons/barcode-scanner.png", title: "Detection" },
+    { href: "/settings", icon: "/Icons/gear.png", title: "Settings" },
+    { href: "/account", icon: "/Icons/profile.png", title: "Account" },
+  ], [])
 
-  const navigationCards = [
-    { href: "/detection", icon: "/Icons/camera-focus.gif", title: "Detection", accentPosition: "top" as const },
-    { href: "/settings",  icon: "/Icons/settings.gif",      title: "Settings",  accentPosition: "right" as const },
-    { href: "/account",   icon: "/Icons/user.gif",          title: "Account",   accentPosition: "bottom" as const },
-  ]
-
-  // show egg + immediately navigate
   const handleNavigation = (href: string, title: string, icon: string) => {
     setNavigationContext({ title, icon, destination: href })
     setIsNavigating(true)
     router.push(href)
   }
 
-  // hide egg when its internal animation completes
-  const completeNavigation = () => {
-    setIsNavigating(false)
-  }
+  const completeNavigation = () => setIsNavigating(false)
 
   return (
     <div className="h-screen overflow-hidden bg-[#0e5f97] p-3 sm:p-4 md:p-6 relative">
-      {/* egg-loading overlay */}
-      <EggLoading
-        isLoading={isNavigating}
-        onComplete={completeNavigation}
-        context={navigationContext}
-      />
-
-      {/* background pattern & elements */}
+      <EggLoading isLoading={isNavigating} onComplete={completeNavigation} context={navigationContext} />
       <BackgroundElements />
 
       <div className="max-w-3xl mx-auto relative">
-        {/* header */}
         <header className="flex flex-col sm:flex-row justify-between items-center gap-3 mb-6 text-white">
           <div className="flex items-center gap-3 group">
             <div className="h-10 w-auto relative">
               <div className="absolute inset-0 bg-white rounded opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
-              <div className="absolute inset-0 bg-gradient-to-br from-cyan-300/10 to-transparent rounded blur-sm transform scale-110 opacity-0 group-hover:opacity-100 transition-all duration-500" />
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-300/10 to-transparent rounded blur-sm scale-110 opacity-0 group-hover:opacity-100 transition-all duration-500" />
               <Image
                 src="/Logos/logoblue.png"
                 alt="Megg Logo"
@@ -134,32 +101,26 @@ export default function Home() {
             </div>
 
             <div className="text-xl font-medium bg-white/10 backdrop-blur-sm px-3 py-1 rounded-lg flex items-center gap-2 group">
-              <div className={`transition-all duration-500 ${isDaytime ? "text-yellow-300" : "text-blue-200"}`}>
-                {isDaytime ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              <div className={`transition-all duration-500 ${timeState.isDaytime ? "text-yellow-300" : "text-blue-200"}`}>
+                {timeState.isDaytime ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </div>
               <span>{formattedTime}</span>
             </div>
           </div>
         </header>
 
-        {/* navigation cards */}
         <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 gap-4 mb-8">
           {navigationCards.map((card) => (
-            <div
+            <NavigationCard
               key={card.href}
+              href="#"
+              icon={card.icon}
+              title={card.title}
               onClick={() => handleNavigation(card.href, card.title, card.icon)}
-            >
-              <NavigationCard
-                href="#"
-                icon={card.icon}
-                title={card.title}
-                accentPosition={card.accentPosition}
-              />
-            </div>
+            />
           ))}
         </div>
 
-        {/* promotional banner */}
         <PromotionalBanner />
       </div>
     </div>

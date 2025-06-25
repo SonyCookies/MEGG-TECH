@@ -17,13 +17,7 @@ export default function StatusIndicator({ isActive, activeIcon, inactiveIcon }: 
                 } 
                 shadow-sm transition-all duration-300`}
     >
-      {/* Pulsing ring effect */}
-      <div
-        className={`absolute inset-0 rounded-full ${isActive ? "bg-green-400/10" : "bg-red-400/10"} 
-                    animate-ping opacity-75`}
-      ></div>
-
-      {/* Icon */}
+      {/* Icon only, no pulse */}
       {isActive ? activeIcon : inactiveIcon}
     </div>
   )

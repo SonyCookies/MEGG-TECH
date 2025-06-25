@@ -154,11 +154,9 @@ export default function DetectionPage() {
     return () => clearTimeout(timer)
   }, [isLoaded, showBatchInfo])
 
-    // New function to trigger defect detection
-  const triggerDefectDetection = async () => {
+  const triggerDefectDetection = useCallback(async () => {
     if (!isCameraOn || isProcessing || defectDetection.isProcessing) return
 
-    // Start processing animation
     setIsProcessing(true)
     setProcessingProgress(0)
 
@@ -175,38 +173,19 @@ export default function DetectionPage() {
     try {
       console.log("📸 Starting defect detection process")
 
-      // Capture image from video element
       if (isElectronMode) {
-        // In Electron mode, use the camera context to capture a frame
-        console.log("📸 Capturing frame using Electron API")
         const imageData = await camera.captureFrame()
-
         if (imageData) {
-          // Send the image to the defect detection service
           const result = await defectDetection.detectDefect(imageData)
-
-          if (result) {
-            setDetectionResult(result)
-          }
+          if (result) setDetectionResult(result)
         } else {
           throw new Error("Failed to capture frame from Electron camera")
         }
       } else {
-        // In browser mode, capture image from video element
-        if (!videoRef.current) {
-          throw new Error("Video element not available")
-        }
-
-        console.log("📸 Capturing image from video element")
+        if (!videoRef.current) throw new Error("Video element not available")
         const imageData = await captureImageFromVideo(videoRef.current)
-        console.log("📸 Image captured successfully")
-
-        // Send the image to the defect detection service
         const result = await defectDetection.detectDefect(imageData)
-
-        if (result) {
-          setDetectionResult(result)
-        }
+        if (result) setDetectionResult(result)
       }
 
       clearInterval(progressInterval)
@@ -219,7 +198,8 @@ export default function DetectionPage() {
     } finally {
       setIsProcessing(false)
     }
-  }
+  }, [isCameraOn, isProcessing, isElectronMode, camera, defectDetection, videoRef])
+
   // Perform defect detection at regular intervals when camera is on
   useEffect(() => {
     if (isCameraOn && !isProcessing && !defectDetection.isProcessing) {
@@ -676,10 +656,10 @@ export default function DetectionPage() {
       )}
 
       {/* WebSocket connection status */}
-      <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 rounded-md text-xs flex items-center gap-1 z-50">
+      {/* <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 rounded-md text-xs flex items-center gap-1 z-50">
         <div className={`w-2 h-2 rounded-full ${defectDetection.isConnected ? "bg-green-500" : "bg-red-500"}`}></div>
         <span>Detection Service: {defectDetection.isConnected ? "Connected" : "Disconnected"}</span>
-      </div>
+      </div> */}
 
       {/* Dynamic background with floating particles */}
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9InN2ZyIgdm1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0wIDBoNjB2NjBIMHoiLz48cGF0aCBkPSJNMzAgMzBoMzB2MzBIMzB6IiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIgc3Ryb2tlLXdpZHRoPSIuNSIvPjxwYXRoIGQ9Ik0wIDMwaDMwdjMwSDB6IiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIgc3Ryb2tlLXdpZHRoPSIuNSIvPjxwYXRoIGQ9Ik0zMCAwSDB2MzBoMzB6IiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIgc3Ryb2tlLXdpZHRoPSIuNSIvPjxwYXRoIGQ9Ik0zMCAwaDMwdjMwSDMweiIgc3Ryb2tlPSNyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiIHN0cm9rZS13aWR0aD0iLjUiLz48L2c+PC9zdmc+')] opacity-70"></div>
