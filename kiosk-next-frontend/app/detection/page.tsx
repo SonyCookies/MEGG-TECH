@@ -24,7 +24,6 @@ import {
   CircleDot,
   X,
   Loader,
-  MonitorSmartphone,
 } from "lucide-react"
 import { useWebSocket, useInternetConnection } from "../contexts/NetworkContext"
 import { useCamera } from "../contexts/CameraContext"
@@ -35,7 +34,6 @@ import type { ReactNode } from "react"
 // Import the camera overlay components
 import { CameraLoadingOverlay } from "./components/camera-loading-overlay"
 import { CameraErrorOverlay } from "./components/camera-error-overlay"
-import ElectronCameraIntegration from "./components/electron-camera-integration"
 import CameraStartupAnimation from "./components/camera-startup-animation"
 
 // Types
@@ -67,7 +65,6 @@ export default function DetectionPage() {
   const [activeTab, setActiveTab] = useState<"quality" | "size">("quality")
   const [isCameraLoading, setIsCameraLoading] = useState(false)
   const [showErrorOverlay, setShowErrorOverlay] = useState(false)
-  const [isElectronMode, setIsElectronMode] = useState(false)
   const [showCameraStartupAnimation, setShowCameraStartupAnimation] = useState(false)
 
   // Get camera context
@@ -75,17 +72,6 @@ export default function DetectionPage() {
 
   // Get defect detection context
   const defectDetection = useDefectDetection()
-
-  // Check if we're running in Electron
-  useEffect(() => {
-    const checkElectron = () => {
-      const isElectron = window && window.electronAPI !== undefined
-      console.log("🖥️ Running in Electron:", isElectron)
-      setIsElectronMode(isElectron)
-    }
-
-    checkElectron()
-  }, [])
 
   // Connect to the defect detection service when the component mounts
   useEffect(() => {
@@ -173,20 +159,10 @@ export default function DetectionPage() {
     try {
       console.log("📸 Starting defect detection process")
 
-      if (isElectronMode) {
-        const imageData = await camera.captureFrame()
-        if (imageData) {
-          const result = await defectDetection.detectDefect(imageData)
-          if (result) setDetectionResult(result)
-        } else {
-          throw new Error("Failed to capture frame from Electron camera")
-        }
-      } else {
-        if (!videoRef.current) throw new Error("Video element not available")
-        const imageData = await captureImageFromVideo(videoRef.current)
-        const result = await defectDetection.detectDefect(imageData)
-        if (result) setDetectionResult(result)
-      }
+      if (!videoRef.current) throw new Error("Video element not available")
+      const imageData = await captureImageFromVideo(videoRef.current)
+      const result = await defectDetection.detectDefect(imageData)
+      if (result) setDetectionResult(result)
 
       clearInterval(progressInterval)
       setProcessingProgress(100)
@@ -198,7 +174,7 @@ export default function DetectionPage() {
     } finally {
       setIsProcessing(false)
     }
-  }, [isCameraOn, isProcessing, isElectronMode, camera, defectDetection, videoRef])
+  }, [isCameraOn, isProcessing, camera, defectDetection, videoRef])
 
   // Perform defect detection at regular intervals when camera is on
   useEffect(() => {
@@ -223,14 +199,6 @@ export default function DetectionPage() {
   const stopVideoStream = useCallback(() => {
     console.log("🎥 Stopping video stream")
 
-    if (isElectronMode) {
-      // In Electron mode, use the camera context
-      camera.stopCamera()
-      setIsCameraOn(false)
-      console.log("✅ Electron camera stopped successfully")
-      return
-    }
-
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream
       const tracks = stream.getTracks()
@@ -244,24 +212,6 @@ export default function DetectionPage() {
     } else {
       console.log("ℹ️ No video stream to stop")
     }
-  }, [isElectronMode, camera])
-
-  // Handle camera ready from Electron integration
-  const handleElectronCameraReady = useCallback(() => {
-    console.log("🎥 Electron camera is ready")
-    setIsCameraOn(true)
-    setIsCameraLoading(false)
-    setShowCameraStartupAnimation(false)
-    setShowErrorOverlay(false)
-  }, [])
-
-  // Handle camera error from Electron integration
-  const handleElectronCameraError = useCallback((error: string) => {
-    console.error("❌ Electron camera error:", error)
-    setErrorMessage(error)
-    setIsCameraLoading(false)
-    setShowCameraStartupAnimation(false)
-    setShowErrorOverlay(true)
   }, [])
 
   // Toggle camera function that handles both Electron and browser modes
@@ -288,14 +238,6 @@ export default function DetectionPage() {
 
         // Show the egg loading animation
         setShowCameraStartupAnimation(true)
-
-        // If in Electron mode, use the camera context
-        if (isElectronMode) {
-          console.log("🎥 Using Electron camera API")
-          await camera.startCamera()
-          // The ElectronCameraIntegration component will handle the rest
-          return
-        }
 
         // Rest of the existing camera initialization code...
         console.log("🔍 Checking for camera permissions and available devices...")
@@ -519,7 +461,6 @@ export default function DetectionPage() {
     setShowBatchInfo(!showBatchInfo)
   }
 
-
   // Helper function to get color class based on prediction type
   const getTextColorClass = (type: string | null) => {
     if (!type) return "text-gray-700"
@@ -628,14 +569,6 @@ export default function DetectionPage() {
 
   return (
     <div className="min-h-screen bg-[#0e5f97] pt-4 px-4 pb-4 flex flex-col items-center relative overflow-hidden">
-      {/* Electron Camera Integration (non-visual component) */}
-      {isElectronMode && (
-        <ElectronCameraIntegration
-          onCameraReady={handleElectronCameraReady}
-          onCameraError={handleElectronCameraError}
-        />
-      )}
-
       {/* Camera startup animation */}
       {showCameraStartupAnimation && (
         <CameraStartupAnimation
@@ -646,14 +579,6 @@ export default function DetectionPage() {
 
       {isCameraLoading && !showCameraStartupAnimation && <CameraLoadingOverlay />}
       {showErrorOverlay && <CameraErrorOverlay error={errorMessage} onRetry={handleRetryCamera} />}
-
-      {/* Environment indicator for debugging */}
-      {isElectronMode && (
-        <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 rounded-md text-xs flex items-center gap-1 z-50">
-          <MonitorSmartphone size={14} />
-          <span>Electron Mode</span>
-        </div>
-      )}
 
       {/* WebSocket connection status */}
       {/* <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 rounded-md text-xs flex items-center gap-1 z-50">
