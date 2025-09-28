@@ -6,6 +6,11 @@ const transporter = createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
   },
+  secure: true,
+  tls: {
+    rejectUnauthorized: false
+  },
+  port: 465
 })
 
 export async function POST(request) {

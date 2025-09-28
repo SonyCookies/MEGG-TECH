@@ -9,6 +9,12 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: "User ID is required" }, { status: 400 })
     }
 
+    // Check if notifications are enabled for this user
+    const settingsDoc = await firestore.collection("notificationSettings").doc(userId).get()
+    if (!settingsDoc.exists || settingsDoc.data().notificationsEnabled === false) {
+      return NextResponse.json({ success: false, error: "Notifications are disabled for this user" }, { status: 403 })
+    }
+
     // Get the user's FCM token from Firestore
     const tokenDoc = await firestore.collection("fcmTokens").doc(userId).get()
 

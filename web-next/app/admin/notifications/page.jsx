@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Navbar } from "../../components/NavBar";
-import { Sidebar } from "../../components/Sidebar";
 import Notifications from "../../components/ui/NotificationDesktop";
 
 export default function NotificationPage() {

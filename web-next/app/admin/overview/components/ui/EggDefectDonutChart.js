@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getDefectDistribution } from "../../../../lib/api"
+import { getMachineLinkedDefectDistribution } from "../../../../lib/overview/defect/EggDefectDonutChart"
 
 export function EggDefectDonutChart() {
   const [animationProgress, setAnimationProgress] = useState(0)
@@ -13,12 +13,12 @@ export function EggDefectDonutChart() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const data = await getDefectDistribution()
+        const data = await getMachineLinkedDefectDistribution()
         setSegments(data)
         setLoading(false)
       } catch (err) {
-        console.error("Error fetching defect distribution:", err)
-        setError("Failed to load defect distribution data")
+        console.error("Error fetching machine-linked defect distribution:", err)
+        setError("Failed to load defect distribution data for your linked machines")
         setLoading(false)
       }
     }
@@ -67,7 +67,20 @@ export function EggDefectDonutChart() {
   if (error) {
     return (
       <div className="relative h-full w-full flex items-center justify-center">
-        <div className="text-red-500">{error}</div>
+        <div className="text-red-500 text-center">
+          {error}
+        </div>
+      </div>
+    )
+  }
+
+  // If no data is available
+  if (segments.length === 0 || segments.every(segment => segment.percentage === 0)) {
+    return (
+      <div className="relative h-full w-full flex items-center justify-center">
+        <div className="text-gray-500 text-center px-4">
+          No defect data available for your linked machines
+        </div>
       </div>
     )
   }
@@ -108,20 +121,20 @@ export function EggDefectDonutChart() {
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {hoverSegment ? (
           <>
-            <span className="text-2xl font-bold text-primary transition-all duration-300 ease-out">
+            <span className="text-2xl font-bold text-primary transition-all duration-300 ease-out text-center">
               {hoverSegment.name}
             </span>
-            <span className="text-lg font-semibold text-primary/80 transition-all duration-300 ease-out">
+            <span className="text-lg font-semibold text-primary/80 transition-all duration-300 ease-out text-center">
               {hoverSegment.percentage}%
             </span>
-            <span className="text-sm text-primary/70 transition-all duration-300 ease-out">
+            <span className="text-sm text-primary/70 transition-all duration-300 ease-out text-center">
               {hoverSegment.count.toLocaleString()} defects
             </span>
           </>
         ) : (
           <>
             <span
-              className="text-3xl font-bold text-primary transition-all duration-700 ease-out"
+              className="text-3xl font-bold text-primary transition-all duration-700 ease-out text-center"
               style={{
                 opacity: animationProgress,
                 transform: `scale(${animationProgress})`,
@@ -130,13 +143,13 @@ export function EggDefectDonutChart() {
               100%
             </span>
             <span
-              className="text-sm text-primary/70 transition-all duration-700 ease-out"
+              className="text-sm text-primary/70 transition-all duration-700 ease-out text-center"
               style={{
                 opacity: animationProgress,
                 transform: `translateY(${20 - 20 * animationProgress}px)`,
               }}
             >
-              Defect Distribution
+              Egg Defect Distribution
             </span>
           </>
         )}
@@ -144,4 +157,3 @@ export function EggDefectDonutChart() {
     </div>
   )
 }
-

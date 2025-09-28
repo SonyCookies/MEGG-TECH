@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { getTotalDefectData } from "../../../../lib/api"
+import { getMachineLinkedTotalDefectData } from "../../../../lib/overview/defect/TotalEggDefect"
+import { useRouter } from "next/navigation"
 
 export function TotalEggDefectChart({ timeFrame }) {
   const [hoverData, setHoverData] = useState(null)
@@ -9,34 +10,65 @@ export function TotalEggDefectChart({ timeFrame }) {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [noLinkedMachines, setNoLinkedMachines] = useState(false) // Specifically for no linked machines
   const chartRef = useRef(null)
   const [chartDimensions, setChartDimensions] = useState({
     width: 0,
     height: 0,
   })
+  const router = useRouter()
+
+  const handleManageMachines = () => {
+    router.push("/admin/settings?component=AddMachines")
+  }
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true)
-        let chartData = await getTotalDefectData(timeFrame)
 
-        // Ensure we have data for all days
+        // Get the raw data from the existing function
+        const rawData = await getMachineLinkedTotalDefectData(timeFrame)
+
+        // Check if the response specifically indicates no linked machines
+        // This assumes getMachineLinkedTotalDefectData returns a special indicator
+        // when there are no linked machines (like null, an empty array, or a specific flag)
+
+        // If rawData is null or undefined, or an empty array, we assume no linked machines
+        if (!rawData || (Array.isArray(rawData) && rawData.length === 0)) {
+          setNoLinkedMachines(true)
+          setLoading(false)
+          return
+        }
+
+        // If we have data, process it for the chart
+        let chartData = rawData
+
+        // Ensure we have data for all periods
         if (timeFrame === "daily") {
           const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
           chartData = daysOfWeek.map((day) => {
             const existingData = chartData.find((d) => d.day === day)
             return existingData || { day, defects: 0 }
           })
+        } else if (timeFrame === "monthly") {
+          // Ensure we have data for all months
+          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+
+          // Create a complete dataset with all months
+          chartData = months.map((month) => {
+            const existingData = chartData.find((d) => d.month === month)
+            return existingData || { month, defects: 0 }
+          })
         }
 
         setData(chartData)
+        setNoLinkedMachines(false)
         setLoading(false)
-        // Reset animation when data changes
         setAnimationProgress(0)
       } catch (err) {
-        console.error("Error fetching total defect data:", err)
-        setError("Failed to load defect data")
+        console.error("Error fetching machine-linked total defect data:", err)
+        setError("Failed to load defect data for your linked machines")
         setLoading(false)
       }
     }
@@ -57,7 +89,7 @@ export function TotalEggDefectChart({ timeFrame }) {
 
     // Start the animation when data is loaded
     if (data.length > 0 && !loading) {
-      const animationDuration = 1500 // 1.5 seconds
+      const animationDuration = 4000 // 1.5 seconds
       const startTime = Date.now()
 
       const animateChart = () => {
@@ -120,7 +152,7 @@ export function TotalEggDefectChart({ timeFrame }) {
 
   if (loading) {
     return (
-      <div className="relative w-full h-[300px] flex items-center justify-center">
+      <div className="relative w-full h-[300px] flex items-center justify-center bg-white rounded-lg border border-gray-200">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     )
@@ -128,16 +160,65 @@ export function TotalEggDefectChart({ timeFrame }) {
 
   if (error) {
     return (
-      <div className="relative w-full h-[300px] flex items-center justify-center">
+      <div className="relative w-full h-[300px] flex items-center justify-center bg-white rounded-lg border border-gray-200">
         <div className="text-red-500">{error}</div>
       </div>
     )
   }
 
-  if (data.length === 0) {
+  // Show "No machines linked" message only when specifically flagged
+  if (noLinkedMachines) {
     return (
-      <div className="relative w-full h-[300px] flex items-center justify-center">
-        <div className="text-gray-500">No data available</div>
+      <div className="relative w-full h-[300px] flex flex-col items-center justify-center bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex flex-col items-center justify-center gap-2 text-center">
+          {/* Monitor icon */}
+          <div className="w-12 h-12 mb-2 flex items-center justify-center rounded-full bg-gray-100">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-gray-400"
+            >
+              <rect width="20" height="14" x="2" y="3" rx="2" />
+              <line x1="8" x2="16" y1="21" y2="21" />
+              <line x1="12" x2="12" y1="17" y2="21" />
+            </svg>
+          </div>
+
+          {/* Text */}
+          <h3 className="text-base font-medium text-gray-900">No machines linked</h3>
+          <p className="text-sm text-gray-500 mb-4">You don't have any machines linked to your account yet.</p>
+
+          {/* Button */}
+          <button
+            type="button"
+            onClick={handleManageMachines}
+            className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="mr-2"
+            >
+              <path d="M5 12h14" />
+              <path d="M12 5v14" />
+            </svg>
+            Add Machines
+          </button>
+        </div>
       </div>
     )
   }
@@ -145,23 +226,56 @@ export function TotalEggDefectChart({ timeFrame }) {
   // Calculate maxDefects with a fallback to 1 to avoid division by zero
   const maxDefects = Math.max(1, ...data.map((d) => d.defects))
 
-  // Create a continuous line path
-  const linePath = data
-    .map((d, i) => {
+  // Create line segments directly connecting each point
+  const createLineSegments = () => {
+    const segments = []
+
+    for (let i = 0; i < data.length - 1; i++) {
+      const x1 = (i / (data.length - 1)) * chartWidth
+      const y1 = chartHeight - ((data[i].defects || 0) / maxDefects) * chartHeight
+
+      const x2 = ((i + 1) / (data.length - 1)) * chartWidth
+      const y2 = chartHeight - ((data[i + 1].defects || 0) / maxDefects) * chartHeight
+
+      segments.push(
+        <line
+          key={i}
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          stroke="#fb510f"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{
+            opacity: animationProgress > i / data.length ? 1 : 0,
+            transition: "opacity 0.3s ease",
+          }}
+        />,
+      )
+    }
+
+    return segments
+  }
+
+  // Create area path
+  const createAreaPath = () => {
+    let path = `M0,${chartHeight} `
+
+    data.forEach((d, i) => {
       const x = (i / (data.length - 1)) * chartWidth
-      // Ensure y is a valid number by using a fallback when defects is 0
       const y = chartHeight - ((d.defects || 0) / maxDefects) * chartHeight
-      return `${i === 0 ? "M" : "L"}${x},${y}`
+      path += `L${x},${y} `
     })
-    .join(" ")
 
-  const areaPath = `${linePath} L${chartWidth},${chartHeight} L0,${chartHeight} Z`
+    path += `L${chartWidth},${chartHeight} Z`
 
-  // Check if all defects are 0
-  const allZeroDefects = data.every((d) => d.defects === 0)
+    return path
+  }
 
   return (
-    <div className="relative w-full h-[300px]" ref={chartRef}>
+    <div className="relative w-full h-[300px] bg-white border border-gray-200 rounded-lg p-2" ref={chartRef}>
       <svg
         className="w-full h-full"
         viewBox={`0 0 ${chartDimensions.width} ${chartDimensions.height}`}
@@ -174,30 +288,16 @@ export function TotalEggDefectChart({ timeFrame }) {
           </linearGradient>
         </defs>
         <g transform={`translate(${padding.left}, ${padding.top})`}>
-          {/* Only render the line if there's actual data */}
-          {!allZeroDefects && (
-            <>
-              <path
-                d={linePath}
-                fill="none"
-                stroke="#fb510f"
-                strokeWidth="3"
-                strokeDasharray={chartWidth}
-                strokeDashoffset={chartWidth * (1 - animationProgress) - 3}
-              />
-              <path
-                d={areaPath}
-                fill="url(#defectLineGradient)"
-                opacity={Math.min(1, (chartWidth - (chartWidth * (1 - animationProgress) - 3)) / chartWidth)}
-              />
-            </>
-          )}
+          {/* Draw the area fill */}
+          <path d={createAreaPath()} fill="url(#defectLineGradient)" opacity={animationProgress} />
 
-          {/* Always render the data points and labels */}
+          {/* Draw line segments directly between points */}
+          {createLineSegments()}
+
+          {/* Data points */}
           {data.map((d, i) => {
             const x = (i / (data.length - 1)) * chartWidth
-            // For zero data, position all points at the bottom of the chart
-            const y = allZeroDefects ? chartHeight : chartHeight - ((d.defects || 0) / maxDefects) * chartHeight
+            const y = chartHeight - ((d.defects || 0) / maxDefects) * chartHeight
             const pointProgress = Math.min(1, animationProgress * data.length * 1.5 - i)
 
             return (
@@ -231,13 +331,6 @@ export function TotalEggDefectChart({ timeFrame }) {
         </g>
       </svg>
 
-      {/* Show a "No data" message when all defects are zero */}
-      {allZeroDefects && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-gray-500">No defect data for this period</div>
-        </div>
-      )}
-
       {hoverData && (
         <div
           className="absolute bg-white p-3 rounded-xl shadow-lg text-sm border border-gray-200 transition-all duration-300 ease-in-out"
@@ -256,4 +349,3 @@ export function TotalEggDefectChart({ timeFrame }) {
     </div>
   )
 }
-

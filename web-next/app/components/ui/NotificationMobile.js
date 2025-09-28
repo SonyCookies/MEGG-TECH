@@ -5,7 +5,8 @@ import { Bell, Ellipsis, Trash, Check } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { auth } from "../../config/firebaseConfig"
-import { getUserNotifications, markNotificationAsRead, deleteNotification } from "../../lib/notifications/NotificationsService.js"
+import { getCurrentUser } from "../../utils/auth-utils"
+import { getUserNotifications, markNotificationAsRead, deleteNotification } from "../../lib/notifications/NotificationsService"
 
 export default function NotificationMobile({ notificationOpen, setNotificationOpen }) {
   const [activeAction, setActiveAction] = useState(null)
@@ -87,7 +88,7 @@ export default function NotificationMobile({ notificationOpen, setNotificationOp
   useEffect(() => {
     const loadNotifications = async () => {
       try {
-        const user = auth.currentUser
+        const user = getCurrentUser()
         if (user) {
           const userNotifications = await getUserNotifications(user.uid)
           setNotifications(userNotifications)

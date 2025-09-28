@@ -1,18 +1,78 @@
-import { collection, getDocs, query, where } from "firebase/firestore"
-import { db } from "../../config/firebaseConfig"
+import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore"
+import { ref, getDownloadURL } from "firebase/storage"
+import { db, storage } from "../../config/firebaseConfig"
+import { getCurrentUser } from "../../utils/auth-utils"
 
-// Get all defect logs
-export const getDefectLogs = async () => {
+/**
+ * Get the current user's linked machines
+ * @returns {Promise<string[]>} Array of machine IDs linked to the current user
+ */
+export const getUserLinkedMachines = async () => {
   try {
-    const defectLogsRef = collection(db, "defect_logs")
-    const snapshot = await getDocs(defectLogsRef)
+    // Get current user using our unified auth utility
+    const user = getCurrentUser()
+    if (!user) {
+      console.error("No authenticated user found")
+      return []
+    }
 
-    return snapshot.docs.map((doc) => {
+    // Get user document from Firestore
+    const userDocRef = doc(db, "users", user.uid)
+    const userDoc = await getDoc(userDocRef)
+
+    if (!userDoc.exists()) {
+      console.error("User document not found")
+      return []
+    }
+
+    // Get linked machines from user document
+    const userData = userDoc.data()
+    const linkedMachines = userData.linkedMachines || []
+    
+    return Array.isArray(linkedMachines) ? linkedMachines : []
+  } catch (error) {
+    console.error("Error getting user's linked machines:", error)
+    return []
+  }
+}
+
+/**
+ * Get defect logs only for machines linked to the current user
+ * @returns {Promise<Array>} Array of defect logs for machines linked to the current user
+ */
+export const getMachineLinkedDefectLogs = async () => {
+  try {
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return empty array
+    if (linkedMachines.length === 0) {
+      return []
+    }
+
+    // Query defect logs where machine_id is in the user's linked machines
+    const defectLogsRef = collection(db, "defect_logs")
+    const q = query(defectLogsRef, where("machine_id", "in", linkedMachines))
+    const snapshot = await getDocs(q)
+
+    const logs = await Promise.all(snapshot.docs.map(async (doc) => {
       const data = doc.data()
       // Convert Firestore timestamp to readable format
       const timestamp = data.timestamp ? new Date(data.timestamp) : new Date()
       const dateStr = timestamp.toLocaleDateString()
       const timeStr = timestamp.toLocaleTimeString()
+
+      // Fetch image URL if image_id exists
+      let imageUrl = null
+      if (data.image_id && data.batch_id) {
+        try {
+          const imagePath = `images/${data.batch_id}/${data.image_id}`
+          const imageRef = ref(storage, imagePath)
+          imageUrl = await getDownloadURL(imageRef)
+        } catch (error) {
+          console.warn(`Failed to fetch image URL for ${data.image_id}:`, error)
+        }
+      }
 
       return {
         id: doc.id,
@@ -22,24 +82,42 @@ export const getDefectLogs = async () => {
         defectType: data.defect_type || "",
         confidence: data.confidence_score ? Number.parseFloat(data.confidence_score) * 100 : 0,
         imageId: data.image_id || "",
+        imageUrl: imageUrl,
         machineId: data.machine_id || "",
       }
-    })
+    }))
+
+    return logs
   } catch (error) {
-    console.error("Error getting defect logs: ", error)
+    console.error("Error getting machine-linked defect logs:", error)
     return []
   }
 }
 
-// Get defect logs with filters
-export const getFilteredDefectLogs = async (filters) => {
+/**
+ * Get filtered defect logs only for machines linked to the current user
+ * @param {Object} filters - Filter criteria
+ * @returns {Promise<Array>} Filtered array of defect logs for machines linked to the current user
+ */
+export const getFilteredMachineLinkedDefectLogs = async (filters) => {
   try {
     const { defectType, date, batchNumber, searchQuery } = filters
 
-    const defectLogsRef = collection(db, "defect_logs")
-    const constraints = []
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return empty array
+    if (linkedMachines.length === 0) {
+      return []
+    }
 
-    // Apply filters
+    const defectLogsRef = collection(db, "defect_logs")
+    const constraints = [
+      // Always filter by user's linked machines
+      where("machine_id", "in", linkedMachines)
+    ]
+
+    // Apply additional filters
     if (defectType && defectType !== "All Types") {
       constraints.push(where("defect_type", "==", defectType))
     }
@@ -61,16 +139,27 @@ export const getFilteredDefectLogs = async (filters) => {
     }
 
     // Create query with constraints
-    const q = constraints.length > 0 ? query(defectLogsRef, ...constraints) : query(defectLogsRef)
-
+    const q = query(defectLogsRef, ...constraints)
     const snapshot = await getDocs(q)
 
-    let results = snapshot.docs.map((doc) => {
+    let results = await Promise.all(snapshot.docs.map(async (doc) => {
       const data = doc.data()
       // Convert Firestore timestamp to readable format
       const timestamp = data.timestamp ? new Date(data.timestamp) : new Date()
       const dateStr = timestamp.toLocaleDateString()
       const timeStr = timestamp.toLocaleTimeString()
+
+      // Fetch image URL if image_id exists
+      let imageUrl = null
+      if (data.image_id && data.batch_id) {
+        try {
+          const imagePath = `images/${data.batch_id}/${data.image_id}`
+          const imageRef = ref(storage, imagePath)
+          imageUrl = await getDownloadURL(imageRef)
+        } catch (error) {
+          console.warn(`Failed to fetch image URL for ${data.image_id}:`, error)
+        }
+      }
 
       return {
         id: doc.id,
@@ -80,9 +169,10 @@ export const getFilteredDefectLogs = async (filters) => {
         defectType: data.defect_type || "",
         confidence: data.confidence_score ? Number.parseFloat(data.confidence_score) * 100 : 0,
         imageId: data.image_id || "",
+        imageUrl: imageUrl,
         machineId: data.machine_id || "",
       }
-    })
+    }))
 
     // Apply search query filter client-side
     if (searchQuery) {
@@ -94,34 +184,66 @@ export const getFilteredDefectLogs = async (filters) => {
 
     return results
   } catch (error) {
-    console.error("Error getting filtered defect logs: ", error)
+    console.error("Error getting filtered machine-linked defect logs:", error)
     return []
   }
 }
 
-// Get unique batch numbers for filter dropdown
-export const getBatchNumbers = async () => {
+/**
+ * Get unique batch numbers for filter dropdown, only from machines linked to the current user
+ * @returns {Promise<string[]>} Array of unique batch numbers
+ */
+export const getMachineLinkedBatchNumbers = async () => {
   try {
-    const batchesRef = collection(db, "batches")
-    const snapshot = await getDocs(batchesRef)
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return empty array
+    if (linkedMachines.length === 0) {
+      return []
+    }
 
-    return snapshot.docs.map((doc) => {
-      const data = doc.data()
-      return data.batch_number || ""
-    })
-  } catch (error) {
-    console.error("Error getting batch numbers: ", error)
-    return []
-  }
-}
-
-// Get unique defect types for filter dropdown
-export const getDefectTypes = async () => {
-  try {
-    // Get unique defect types from defect_logs collection
+    // Query defect logs where machine_id is in the user's linked machines
     const defectLogsRef = collection(db, "defect_logs")
-    const snapshot = await getDocs(defectLogsRef)
+    const q = query(defectLogsRef, where("machine_id", "in", linkedMachines))
+    const snapshot = await getDocs(q)
 
+    // Extract unique batch numbers
+    const batchNumbersSet = new Set()
+    snapshot.docs.forEach((doc) => {
+      const data = doc.data()
+      if (data.batch_id) {
+        batchNumbersSet.add(data.batch_id)
+      }
+    })
+
+    return Array.from(batchNumbersSet)
+  } catch (error) {
+    console.error("Error getting machine-linked batch numbers:", error)
+    return []
+  }
+}
+
+/**
+ * Get unique defect types for filter dropdown, only from machines linked to the current user
+ * @returns {Promise<string[]>} Array of unique defect types
+ */
+export const getMachineLinkedDefectTypes = async () => {
+  try {
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return empty array
+    if (linkedMachines.length === 0) {
+      return []
+    }
+
+    // Query defect logs where machine_id is in the user's linked machines
+    const defectLogsRef = collection(db, "defect_logs")
+    const q = query(defectLogsRef, where("machine_id", "in", linkedMachines))
+    const snapshot = await getDocs(q)
+
+    // Extract unique defect types
     const defectTypesSet = new Set()
     snapshot.docs.forEach((doc) => {
       const data = doc.data()
@@ -132,127 +254,7 @@ export const getDefectTypes = async () => {
 
     return Array.from(defectTypesSet)
   } catch (error) {
-    console.error("Error getting defect types: ", error)
+    console.error("Error getting machine-linked defect types:", error)
     return []
   }
 }
-
-// Export defect logs to different formats
-export const exportDefectLogs = async (filteredLogs, format = "excel") => {
-  try {
-    // Create data for export
-    const headers = ["Date", "Time", "Batch Number", "Defect Type", "Confidence (%)"]
-    const rows = filteredLogs.map((log) => [
-      log.timestamp,
-      log.time,
-      log.batchNumber,
-      log.defectType,
-      log.confidence.toFixed(1),
-    ])
-
-    const timestamp = new Date().toISOString().split("T")[0]
-
-    switch (format) {
-      case "excel":
-        // Export to Excel (CSV format)
-        let csvContent = headers.join(",") + "\n"
-        rows.forEach((row) => {
-          csvContent += row.join(",") + "\n"
-        })
-
-        const csvBlob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-        const csvUrl = URL.createObjectURL(csvBlob)
-        const csvLink = document.createElement("a")
-        csvLink.setAttribute("href", csvUrl)
-        csvLink.setAttribute("download", `defect-logs-export-${timestamp}.csv`)
-        csvLink.style.visibility = "hidden"
-        document.body.appendChild(csvLink)
-        csvLink.click()
-        document.body.removeChild(csvLink)
-        break
-
-      case "document":
-        // Export to Document (HTML format that can be opened in Word)
-        const htmlContent = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Defect Logs Export</title>
-            <style>
-              table { border-collapse: collapse; width: 100%; }
-              th, td { border: 1px solid #ddd; padding: 8px; }
-              th { background-color: #f2f2f2; text-align: left; }
-              tr:nth-child(even) { background-color: #f9f9f9; }
-            </style>
-          </head>
-          <body>
-            <h1>Defect Logs Export</h1>
-            <p>Generated on: ${new Date().toLocaleString()}</p>
-            <table>
-              <thead>
-                <tr>
-                  ${headers.map((header) => `<th>${header}</th>`).join("")}
-                </tr>
-              </thead>
-              <tbody>
-                ${rows
-                  .map(
-                    (row) => `
-                  <tr>
-                    ${row.map((cell) => `<td>${cell}</td>`).join("")}
-                  </tr>
-                `,
-                  )
-                  .join("")}
-              </tbody>
-            </table>
-          </body>
-          </html>
-        `
-
-        const htmlBlob = new Blob([htmlContent], { type: "text/html;charset=utf-8;" })
-        const htmlUrl = URL.createObjectURL(htmlBlob)
-        const htmlLink = document.createElement("a")
-        htmlLink.setAttribute("href", htmlUrl)
-        htmlLink.setAttribute("download", `defect-logs-export-${timestamp}.html`)
-        htmlLink.style.visibility = "hidden"
-        document.body.appendChild(htmlLink)
-        htmlLink.click()
-        document.body.removeChild(htmlLink)
-        break
-
-      case "please":
-        // Export to PLEASE format (JSON format)
-        const jsonData = {
-          exportDate: new Date().toISOString(),
-          exportType: "PLEASE",
-          headers: headers,
-          data: filteredLogs.map((log) => ({
-            date: log.timestamp,
-            time: log.time,
-            batchNumber: log.batchNumber,
-            defectType: log.defectType,
-            confidence: log.confidence,
-          })),
-        }
-
-        const jsonContent = JSON.stringify(jsonData, null, 2)
-        const jsonBlob = new Blob([jsonContent], { type: "application/json;charset=utf-8;" })
-        const jsonUrl = URL.createObjectURL(jsonBlob)
-        const jsonLink = document.createElement("a")
-        jsonLink.setAttribute("href", jsonUrl)
-        jsonLink.setAttribute("download", `defect-logs-export-${timestamp}.json`)
-        jsonLink.style.visibility = "hidden"
-        document.body.appendChild(jsonLink)
-        jsonLink.click()
-        document.body.removeChild(jsonLink)
-        break
-
-      default:
-        console.error("Unknown export format:", format)
-    }
-  } catch (error) {
-    console.error("Error exporting defect logs:", error)
-  }
-}
-

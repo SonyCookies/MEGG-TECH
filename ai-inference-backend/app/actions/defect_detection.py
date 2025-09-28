@@ -4,7 +4,6 @@ import logging
 import os
 import httpx
 from dotenv import load_dotenv
-from app.utils.image_processing import predict_defect
 
 load_dotenv()
 
@@ -14,29 +13,23 @@ IOT_BACKEND_MOVE_ENDPOINT = os.getenv("IOT_BACKEND_MOVE_ENDPOINT", "http://local
 
 
 async def handle_defect_detection(message):
+  """
+  Simplified defect detection handler - now only handles motor movement
+  AI detection is handled directly by the frontend via Roboflow API
+  """
   try:
-    image_data = message.get('image')
-    if not image_data:
-      logger.error("No image data received")
-      return {
-        "action": "defect_detection_result",
-        "error": "No image data received"
-      }
-    logger.info("Processing image for defect detection")
-    predicted_class, confidence = predict_defect(image_data)
-
-    #######################################
+    logger.info("🔍 Processing defect detection request")
+    
+    # Trigger motor movement
     await move_motor()
-    #######################################
 
     return {
       "action": "defect_detection_result",
-      "defects": [predicted_class],
-      "confidence": confidence,
-      "image": image_data
+      "status": "motor_triggered",
+      "message": "Motor movement completed"
     }
   except Exception as e:
-    logger.exception("Error during defect detection")
+    logger.error(f"❌ Error during defect detection: {e}")
     return {
       "action": "defect_detection_result",
       "error": str(e)

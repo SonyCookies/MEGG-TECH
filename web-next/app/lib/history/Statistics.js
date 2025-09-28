@@ -1,7 +1,41 @@
-import { collection, getDocs } from "firebase/firestore"
+import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore"
 import { db } from "../../config/firebaseConfig"
+import { getCurrentUser } from "../../utils/auth-utils"
 
-// Replace the getDateRange function with this updated version
+/**
+ * Get the current user's linked machines
+ * @returns {Promise<string[]>} Array of machine IDs linked to the current user
+ */
+export const getUserLinkedMachines = async () => {
+  try {
+    // Get current user using our unified auth utility
+    const user = getCurrentUser()
+    if (!user) {
+      console.error("No authenticated user found")
+      return []
+    }
+
+    // Get user document from Firestore
+    const userDocRef = doc(db, "users", user.uid)
+    const userDoc = await getDoc(userDocRef)
+
+    if (!userDoc.exists()) {
+      console.error("User document not found")
+      return []
+    }
+
+    // Get linked machines from user document
+    const userData = userDoc.data()
+    const linkedMachines = userData.linkedMachines || []
+    
+    return Array.isArray(linkedMachines) ? linkedMachines : []
+  } catch (error) {
+    console.error("Error getting user's linked machines:", error)
+    return []
+  }
+}
+
+// Get date range based on time filter
 const getDateRange = (filter) => {
   const now = new Date()
   const end = now
@@ -30,13 +64,27 @@ const getDateRange = (filter) => {
   }
 }
 
-// Replace the getDefectLogs function with this updated version
-export const getDefectLogs = async (timeFilter = "24h") => {
+/**
+ * Get defect logs only for machines linked to the current user within a time range
+ * @param {string} timeFilter - Time filter (24h, 7d, 30d, 90d)
+ * @returns {Promise<Array>} Array of defect logs for machines linked to the current user
+ */
+export const getMachineLinkedDefectLogs = async (timeFilter = "24h") => {
   try {
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return empty array
+    if (linkedMachines.length === 0) {
+      return []
+    }
+
     const { start, end } = getDateRange(timeFilter)
 
-    // Get all documents from the defect_logs collection
-    const querySnapshot = await getDocs(collection(db, "defect_logs"))
+    // Query defect logs where machine_id is in the user's linked machines
+    const defectLogsRef = collection(db, "defect_logs")
+    const q = query(defectLogsRef, where("machine_id", "in", linkedMachines))
+    const querySnapshot = await getDocs(q)
     const logs = []
 
     querySnapshot.forEach((doc) => {
@@ -56,16 +104,21 @@ export const getDefectLogs = async (timeFilter = "24h") => {
 
     return logs
   } catch (error) {
-    console.error("Error fetching defect logs:", error)
+    console.error("Error fetching machine-linked defect logs:", error)
     return []
   }
 }
 
-// Update the calculateStatistics function
-export const calculateStatistics = async (timeFilter = "24h") => {
+/**
+ * Calculate statistics only for machines linked to the current user
+ * @param {string} timeFilter - Time filter (24h, 7d, 30d, 90d)
+ * @returns {Promise<Object>} Statistics object
+ */
+export const calculateMachineLinkedStatistics = async (timeFilter = "24h") => {
   try {
-    const logs = await getDefectLogs(timeFilter)
-    console.log("Fetched logs:", logs.length, logs) // Debug log
+    // Get logs only for machines linked to the current user
+    const logs = await getMachineLinkedDefectLogs(timeFilter)
+    console.log("Fetched machine-linked logs:", logs.length, logs) // Debug log
 
     // Total inspections
     const totalInspections = logs.length
@@ -111,7 +164,7 @@ export const calculateStatistics = async (timeFilter = "24h") => {
     }
 
     // Calculate trend (compared to previous period)
-    const previousPeriod = await getPreviousPeriodData(timeFilter)
+    const previousPeriod = await getMachineLinkedPreviousPeriodData(timeFilter)
     const inspectionTrend =
       previousPeriod.totalInspections > 0
         ? ((totalInspections - previousPeriod.totalInspections) / previousPeriod.totalInspections) * 100
@@ -129,7 +182,7 @@ export const calculateStatistics = async (timeFilter = "24h") => {
       lastUpdated: new Date().toLocaleTimeString(),
     }
   } catch (error) {
-    console.error("Error calculating statistics:", error)
+    console.error("Error calculating machine-linked statistics:", error)
     return {
       totalInspections: 0,
       defectCounts: {},
@@ -142,17 +195,31 @@ export const calculateStatistics = async (timeFilter = "24h") => {
   }
 }
 
-// Update the getPreviousPeriodData function
-const getPreviousPeriodData = async (timeFilter) => {
+/**
+ * Get previous period data only for machines linked to the current user
+ * @param {string} timeFilter - Time filter (24h, 7d, 30d, 90d)
+ * @returns {Promise<Object>} Previous period data
+ */
+const getMachineLinkedPreviousPeriodData = async (timeFilter) => {
   try {
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return empty array
+    if (linkedMachines.length === 0) {
+      return { totalInspections: 0 }
+    }
+
     const { start, end } = getDateRange(timeFilter)
     const periodDuration = new Date(end) - new Date(start)
 
     const previousStart = new Date(new Date(start).getTime() - periodDuration)
     const previousEnd = new Date(new Date(end).getTime() - periodDuration)
 
-    // Get all documents from the defect_logs collection
-    const querySnapshot = await getDocs(collection(db, "defect_logs"))
+    // Query defect logs where machine_id is in the user's linked machines
+    const defectLogsRef = collection(db, "defect_logs")
+    const q = query(defectLogsRef, where("machine_id", "in", linkedMachines))
+    const querySnapshot = await getDocs(q)
     let totalInspections = 0
 
     querySnapshot.forEach((doc) => {
@@ -167,8 +234,7 @@ const getPreviousPeriodData = async (timeFilter) => {
 
     return { totalInspections }
   } catch (error) {
-    console.error("Error fetching previous period data:", error)
+    console.error("Error fetching machine-linked previous period data:", error)
     return { totalInspections: 0 }
   }
 }
-

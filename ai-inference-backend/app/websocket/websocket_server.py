@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 async def websocket_endpoint(websocket:WebSocket):
   await websocket.accept()
-  logger.info("Websocket connection accepted")
+  logger.info("🔗 WebSocket connection accepted")
 
   while True:
     try:
@@ -24,15 +24,22 @@ async def websocket_endpoint(websocket:WebSocket):
         await websocket.send_text(json.dumps({"error": "Invalid JSON format received"}))
         continue
       except ValueError as ve:
-        logger.error(f"Invalid message structuer: {ve}")
+        logger.error(f"Invalid message structure: {ve}")
         await websocket.send_text(json.dumps({"error": str(ve)}))
         continue
 
       action = message.get("action")
       if action in ACTIONS:
-        logger.info(f"Processing action: {action}")
+        # Reduce logging noise for frequent actions like ping
+        if action != "ping":
+          logger.info(f"Processing action: {action}")
+        
         result = await ACTIONS[action](message)
-        logger.info(f"Sending response: {result}")
+        
+        # Only log responses for non-ping actions to reduce noise
+        if action != "ping":
+          logger.debug(f"Action '{action}' completed successfully")
+        
         await websocket.send_text(json.dumps(result))
 
       else: 
@@ -40,5 +47,5 @@ async def websocket_endpoint(websocket:WebSocket):
         logger.warning(f"Unknown action received: {action}")
         await websocket.send_text(json.dumps(error_message))
     except Exception as e:
-      logger.error(f"Websocket Error: {e}", exc_info=True)
+      logger.error(f"WebSocket Error: {e}", exc_info=True)
       break

@@ -1,83 +1,180 @@
-import { collection, query, getDocs, where, orderBy, Timestamp } from "firebase/firestore"
+import { collection, query, getDocs, where, orderBy, Timestamp, doc, getDoc, limit } from "firebase/firestore"
 import { db } from "../../config/firebaseConfig"
+import { getCurrentUser } from "../../utils/auth-utils"
 
-// Get defects for the current day
-export async function getTodayDefects() {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+/**
+ * Get the current user's linked machines
+ * @returns {Promise<string[]>} Array of machine IDs linked to the current user
+ */
+export const getUserLinkedMachines = async () => {
+  try {
+    // Get current user using our unified auth utility
+    const user = getCurrentUser()
+    if (!user) {
+      console.error("No authenticated user found")
+      return []
+    }
 
-  const tomorrow = new Date(today)
-  tomorrow.setDate(tomorrow.getDate() + 1)
+    // Get user document from Firestore
+    const userDocRef = doc(db, "users", user.uid)
+    const userDoc = await getDoc(userDocRef)
 
-  const startTimestamp = Timestamp.fromDate(today)
-  const endTimestamp = Timestamp.fromDate(tomorrow)
+    if (!userDoc.exists()) {
+      console.error("User document not found")
+      return []
+    }
 
-  const q = query(
-    collection(db, "defect_logs"),
-    where("timestamp", ">=", startTimestamp),
-    where("timestamp", "<", endTimestamp),
-    orderBy("timestamp"),
-  )
-
-  const querySnapshot = await getDocs(q)
-  return querySnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-    timestamp: doc.data().timestamp.toDate(),
-  }))
+    // Get linked machines from user document
+    const userData = userDoc.data()
+    const linkedMachines = userData.linkedMachines || []
+    
+    return Array.isArray(linkedMachines) ? linkedMachines : []
+  } catch (error) {
+    console.error("Error getting user's linked machines:", error)
+    return []
+  }
 }
 
-// Get defects for the previous day
-export async function getPreviousDayDefects() {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+/**
+ * Get defects for the current day only for machines linked to the current user
+ * @returns {Promise<Array>} Array of defects for the current day
+ */
+export async function getMachineLinkedTodayDefects() {
+  try {
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return empty array
+    if (linkedMachines.length === 0) {
+      return []
+    }
 
-  const yesterday = new Date(today)
-  yesterday.setDate(yesterday.getDate() - 1)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
 
-  const startTimestamp = Timestamp.fromDate(yesterday)
-  const endTimestamp = Timestamp.fromDate(today)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
 
-  const q = query(
-    collection(db, "defect_logs"),
-    where("timestamp", ">=", startTimestamp),
-    where("timestamp", "<", endTimestamp),
-    orderBy("timestamp"),
-  )
+    const startTimestamp = Timestamp.fromDate(today)
+    const endTimestamp = Timestamp.fromDate(tomorrow)
 
-  const querySnapshot = await getDocs(q)
-  return querySnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-    timestamp: doc.data().timestamp.toDate(),
-  }))
+    // Modified approach: First query by timestamp range only
+    const q = query(
+      collection(db, "defect_logs"),
+      where("timestamp", ">=", startTimestamp),
+      where("timestamp", "<", endTimestamp),
+      orderBy("timestamp")
+    )
+
+    const querySnapshot = await getDocs(q)
+    
+    // Then filter the results in memory for the linked machines
+    return querySnapshot.docs
+      .filter(doc => linkedMachines.includes(doc.data().machine_id))
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp.toDate(),
+      }))
+  } catch (error) {
+    console.error("Error fetching machine-linked today defects:", error)
+    return []
+  }
 }
 
-// Get defects for the last 7 days
-export async function getWeekDefects() {
-  const today = new Date()
-  today.setHours(23, 59, 59, 999)
+/**
+ * Get defects for the previous day only for machines linked to the current user
+ * @returns {Promise<Array>} Array of defects for the previous day
+ */
+export async function getMachineLinkedPreviousDayDefects() {
+  try {
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return empty array
+    if (linkedMachines.length === 0) {
+      return []
+    }
 
-  const weekAgo = new Date(today)
-  weekAgo.setDate(weekAgo.getDate() - 7)
-  weekAgo.setHours(0, 0, 0, 0)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
 
-  const startTimestamp = Timestamp.fromDate(weekAgo)
-  const endTimestamp = Timestamp.fromDate(today)
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
 
-  const q = query(
-    collection(db, "defect_logs"),
-    where("timestamp", ">=", startTimestamp),
-    where("timestamp", "<=", endTimestamp),
-    orderBy("timestamp"),
-  )
+    const startTimestamp = Timestamp.fromDate(yesterday)
+    const endTimestamp = Timestamp.fromDate(today)
 
-  const querySnapshot = await getDocs(q)
-  return querySnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-    timestamp: doc.data().timestamp.toDate(),
-  }))
+    // Modified approach: First query by timestamp range only
+    const q = query(
+      collection(db, "defect_logs"),
+      where("timestamp", ">=", startTimestamp),
+      where("timestamp", "<", endTimestamp),
+      orderBy("timestamp")
+    )
+
+    const querySnapshot = await getDocs(q)
+    
+    // Then filter the results in memory for the linked machines
+    return querySnapshot.docs
+      .filter(doc => linkedMachines.includes(doc.data().machine_id))
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp.toDate(),
+      }))
+  } catch (error) {
+    console.error("Error fetching machine-linked previous day defects:", error)
+    return []
+  }
+}
+
+/**
+ * Get defects for the last 7 days only for machines linked to the current user
+ * @returns {Promise<Array>} Array of defects for the last 7 days
+ */
+export async function getMachineLinkedWeekDefects() {
+  try {
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return empty array
+    if (linkedMachines.length === 0) {
+      return []
+    }
+
+    const today = new Date()
+    today.setHours(23, 59, 59, 999)
+
+    const weekAgo = new Date(today)
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    weekAgo.setHours(0, 0, 0, 0)
+
+    const startTimestamp = Timestamp.fromDate(weekAgo)
+    const endTimestamp = Timestamp.fromDate(today)
+
+    // Modified approach: First query by timestamp range only
+    const q = query(
+      collection(db, "defect_logs"),
+      where("timestamp", ">=", startTimestamp),
+      where("timestamp", "<=", endTimestamp),
+      orderBy("timestamp")
+    )
+
+    const querySnapshot = await getDocs(q)
+    
+    // Then filter the results in memory for the linked machines
+    return querySnapshot.docs
+      .filter(doc => linkedMachines.includes(doc.data().machine_id))
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp.toDate(),
+      }))
+  } catch (error) {
+    console.error("Error fetching machine-linked week defects:", error)
+    return []
+  }
 }
 
 // Calculate daily average
@@ -203,4 +300,3 @@ export function calculatePercentageChange(current, previous) {
   if (previous === 0) return "Infinity"
   return (((current - previous) / previous) * 100).toFixed(1)
 }
-

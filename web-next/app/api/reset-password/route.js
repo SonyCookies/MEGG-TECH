@@ -3,24 +3,46 @@ import { db } from "../../config/firebaseConfig"
 import { doc, updateDoc, query, collection, where, getDocs } from "firebase/firestore"
 import { generateResetToken } from "../../utils/token"
 
-const transporter = createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-})
+// Create transporter only if email credentials are available
+const createTransporter = () => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    return null
+  }
+
+  return createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD,
+    },
+    tls: {
+      rejectUnauthorized: false,
+      ciphers: 'SSLv3'
+    },
+    requireTLS: true,
+    logger: false,
+    debug: false
+  })
+}
 
 export async function POST(request) {
   try {
+    // Check if email configuration is available
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-      console.error("Email configuration missing")
-      return Response.json({ error: "Email service not configured" }, { status: 500 })
+      console.error("Email configuration missing: EMAIL_USER and EMAIL_PASSWORD environment variables are required")
+      return Response.json({ 
+        error: "Email service not configured. Please contact administrator to set up email service.",
+        code: "EMAIL_NOT_CONFIGURED"
+      }, { status: 503 })
     }
 
     const { email } = await request.json()
+
+    if (!email) {
+      return Response.json({ error: "Email is required" }, { status: 400 })
+    }
 
     // Generate reset token
     const { resetToken, hash, expiryDate } = generateResetToken()
@@ -47,11 +69,23 @@ export async function POST(request) {
 
       if (!process.env.NEXT_PUBLIC_APP_URL) {
         console.error("NEXT_PUBLIC_APP_URL not configured")
-        return Response.json({ error: "Server configuration error" }, { status: 500 })
+        return Response.json({ 
+          error: "Server configuration error. NEXT_PUBLIC_APP_URL is missing.",
+          code: "APP_URL_NOT_CONFIGURED"
+        }, { status: 500 })
       }
 
       // Create reset URL
       const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${resetToken}&email=${email}`
+
+      // Create transporter
+      const transporter = createTransporter()
+      if (!transporter) {
+        return Response.json({ 
+          error: "Email service not available",
+          code: "EMAIL_SERVICE_UNAVAILABLE"
+        }, { status: 503 })
+      }
 
       // Setup email data
       const mailOptions = {
@@ -81,12 +115,19 @@ export async function POST(request) {
         await transporter.verify()
       } catch (error) {
         console.error("SMTP Connection Error:", error)
-        return Response.json({ error: "Email service connection failed" }, { status: 500 })
+        return Response.json({ 
+          error: "Email service connection failed. Please check your email configuration.",
+          code: "SMTP_CONNECTION_FAILED",
+          details: error.message
+        }, { status: 500 })
       }
 
       // Send mail
       await transporter.sendMail(mailOptions)
-      return Response.json({ success: true })
+      return Response.json({ 
+        success: true,
+        message: "Password reset email sent successfully"
+      })
     } catch (error) {
       console.error("Operation error:", error)
       throw error
@@ -96,6 +137,7 @@ export async function POST(request) {
     return Response.json(
       {
         error: "Failed to send reset email",
+        code: "GENERAL_ERROR",
         details: error.message,
       },
       { status: 500 },

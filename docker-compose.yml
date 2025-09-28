@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # AI Inference Backend - Egg Defect Detection
+  ai-inference:
+    build:
+      context: ./ai-inference-backend
+      dockerfile: Dockerfile
+    container_name: ai-inference-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ai-inference-backend/model_weights:/app/model_weights
+      - ./ai-inference-backend/models:/app/models
+      - ./ai-inference-backend/logs:/app/logs
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - megg-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # IoT Backend - Microcontroller Control
+  iot-backend:
+    build:
+      context: ./iot-backend
+      dockerfile: Dockerfile
+    container_name: iot-backend
+    ports:
+      - "8001:8001"
+    volumes:
+      - /dev:/dev  # For hardware access
+      - ./iot-backend/logs:/app/logs
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    privileged: true
+    restart: unless-stopped
+    networks:
+      - megg-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Kiosk Frontend - Next.js + Electron UI
+  kiosk-frontend:
+    build:
+      context: ./kiosk-next-frontend
+      dockerfile: Dockerfile
+    container_name: kiosk-next-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DISPLAY=:99
+      - ELECTRON_DISABLE_SECURITY_WARNINGS=true
+      - AI_BACKEND_URL=http://ai-inference:8000
+      - IOT_BACKEND_URL=http://iot-backend:8001
+      - NEXT_PUBLIC_AI_BACKEND_URL=http://localhost:8000
+      - NEXT_PUBLIC_IOT_BACKEND_URL=http://localhost:8001
+    volumes:
+      - ./kiosk-next-frontend/data:/app/data
+      - ./kiosk-next-frontend/logs:/app/logs
+    devices:
+      - /dev/video0:/dev/video0  # Camera access
+    privileged: true
+    restart: unless-stopped
+    depends_on:
+      ai-inference:
+        condition: service_healthy
+      iot-backend:
+        condition: service_healthy
+    networks:
+      - megg-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  megg-network:
+    driver: bridge
+    name: megg-network
+
+volumes:
+  ai-model-weights:
+  iot-logs:
+  kiosk-data:
+
+

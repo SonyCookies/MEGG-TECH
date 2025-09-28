@@ -11,7 +11,7 @@ import {
   History,
 } from "lucide-react";
 
-export function Sidebar({ mobileSidebarOpen, toggleMobileSidebar }) {
+export  function Sidebar({ mobileSidebarOpen, toggleMobileSidebar }) {
   const pathname = usePathname();
 
   const navItems = [

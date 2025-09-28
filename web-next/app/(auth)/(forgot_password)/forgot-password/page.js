@@ -70,94 +70,100 @@ export default function ForgotPasswordPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        if (data.error === "permission-denied") {
-          throw new Error("Access denied. Please try again later.")
+        // Handle specific error codes
+        switch (data.code) {
+          case "EMAIL_NOT_CONFIGURED":
+            throw new Error("Email service is not configured. Please contact support.")
+          case "APP_URL_NOT_CONFIGURED":
+            throw new Error("Server configuration error. Please contact support.")
+          case "SMTP_CONNECTION_FAILED":
+            throw new Error("Email service connection failed. Please try again later.")
+          case "EMAIL_SERVICE_UNAVAILABLE":
+            throw new Error("Email service is temporarily unavailable. Please try again later.")
+          case "permission-denied":
+            throw new Error("Access denied. Please try again later.")
+          default:
+            throw new Error(data.error || "Failed to send reset email")
         }
-        throw new Error(data.error || "Failed to send reset email")
       }
 
       setGlobalMessage("Password reset instructions sent to your email.")
       setTimeout(() => router.push("/login"), 4000)
     } catch (err) {
       console.error("Reset password error:", err)
-      setGlobalMessage(
-        err.message === "Access denied. Please try again later." ? err.message : "An error occurred. Please try again.",
-      )
+      setGlobalMessage(err.message || "An error occurred. Please try again.")
     } finally {
       setIsLoading(false)
     }
   }
 
+  const viewSignIn = () => {
+    router.push("/login")
+  }
+
   return (
-    <div className="min-h-screen bg-gray-300/10 flex flex-col items-center justify-center sm:p-8">
-      <div className="bg-white shadow sm:border w-full sm:max-w-lg md:max-w-xl xl:max-w-6xl min-h-screen sm:min-h-[700px] flex flex-col xl:flex-row sm:rounded-2xl overflow-hidden">
-        <div className="w-full h-[200px] xl:h-auto relative">
-          <Image src="/login_bg_mobile.svg" alt="Login Background" fill className="object-cover flex xl:hidden" />
-          <Image
-            src="/login_bg_screen.svg"
-            alt="Login Background"
-            fill
-            className="object-cover hidden xl:flex place-content-center place-items-center"
-          />
+    <div className="min-h-screen flex items-center justify-center bg-white lg:bg-transparent">
+      <div className="flex flex-col gap-10 w-full max-w-lg p-6 md:p-8 lg:bg-white lg:shadow lg:rounded-2xl lg:border lg:border-gray-300">
+        {/* logo */}
+        <div className="flex flex-col gap-4 items-center justify-center">
+          <Image src="/logo.png" alt="MEGG Logo" height={46} width={46} />
+
+          <div className="flex flex-col text-center">
+            <span className="text-2xl font-bold">Forgot password</span>
+            <span className="text-gray-500">
+              Enter the email address you used to register with
+            </span>
+          </div>
         </div>
-        <div className="relative w-full p-8 flex flex-col flex-1 xl:flex-auto bg-white">
-          <div className="flex flex-col gap-8 items-center justify-center mt-4 xl:mt-10">
-            <div
-              className={`text-2xl font-semibold flex flex-col text-center gap-1 ${globalMessage ? "mb-0" : "mb-4"}`}
+
+        {/* validation */}
+        {globalMessage && (
+          <div
+            className={`px-4 py-2 rounded-lg border-l-4 ${
+              globalMessage.includes("sent to your email")
+                ? "bg-green-100 border-green-500 text-green-500"
+                : "bg-red-100 border-red-500 text-red-500"
+            }`}
+          >
+            {globalMessage}
+          </div>
+        )}
+
+        {/* forms */}
+        <form onSubmit={handleResetPassword} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <label htmlFor="email">Email</label>
+            <input
+              type="email"
+              name="email"
+              id="email"
+              className="border-b-2 border-gray-300 p-2 rounded outline-none focus:border-blue-500 transition-colors duration-150"
+              placeholder="Enter your email address"
+              value={email}
+              onChange={handleInputChange}
+              disabled={isLoading}
+            />
+            {errors.email && <span className="text-red-500 text-sm">{errors.email}</span>}
+          </div>
+
+          <div className="flex flex-col gap-4 mt-4">
+            <button 
+              type="submit"
+              disabled={isLoading}
+              className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 transition-colors duration-150 cursor-pointer text-white w-full disabled:bg-blue-300 disabled:cursor-not-allowed"
             >
-              Forgot password
-              <span className="text-gray-500 font-normal text-sm">
-                Enter the email address you used to register with.
-              </span>
-            </div>
+              {isLoading ? "Sending..." : "Send reset link"}
+            </button>
 
-            {globalMessage && (
-              <div
-                className={`border-l-4 rounded-lg px-4 py-2 w-full sm:w-3/4 ${
-                  globalMessage.includes("sent to your email")
-                    ? "bg-green-100 border-green-500 text-green-500"
-                    : "bg-red-100 border-red-500 text-red-500"
-                }`}
-              >
-                {globalMessage}
-              </div>
-            )}
-
-            <form onSubmit={handleResetPassword} className="flex flex-col gap-8 w-full sm:w-3/4">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="col-span-2 flex flex-col gap-1 justify-center">
-                  <label htmlFor="email">Email address</label>
-                  <input
-                    type="email"
-                    name="email"
-                    id="email"
-                    className="border-b-2 py-2 outline-none focus:border-blue-500 transition-colors duration-150"
-                    placeholder="Enter your email address"
-                    value={email}
-                    onChange={handleInputChange}
-                    disabled={isLoading}
-                  />
-                  {errors.email && <span className="text-red-500 text-sm">{errors.email}</span>}
-                </div>
-              </div>
-
-              <div className="flex gap-4 items-center mt-2">
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="px-4 py-2 rounded-2xl w-full bg-blue-500 text-white transition-colors duration-150 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? "Sending..." : "Send Reset Link"}
-                </button>
-              </div>
-            </form>
+            <button
+              type="button"
+              onClick={viewSignIn}
+              className="border border-gray-300 hover:bg-gray-100 transition-colors duration-150 cursor-pointer rounded-lg flex items-center justify-center px-4 py-2 gap-2"
+            >
+              Go back to Sign in
+            </button>
           </div>
-          <div className="text-gray-500 text-sm mt-0 sm:mt-10 absolute bottom-8 left-1/2 -translate-x-1/2 w-full flex items-center justify-center">
-            <Link href="/login" className="text-gray-500 hover:text-blue-500 hover:underline hover:underline-offset-8">
-              Back to sign in
-            </Link>
-          </div>
-        </div>
+        </form>
       </div>
     </div>
   )

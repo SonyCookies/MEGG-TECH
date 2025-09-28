@@ -11,6 +11,40 @@ import {
   onSnapshot,
 } from "firebase/firestore"
 import { db } from "../../config/firebaseConfig"
+import { getCurrentUser } from "../../utils/auth-utils"
+
+/**
+ * Get the current user's linked machines
+ * @returns {Promise<string[]>} Array of machine IDs linked to the current user
+ */
+export const getUserLinkedMachines = async () => {
+  try {
+    // Get current user using our unified auth utility
+    const user = getCurrentUser()
+    if (!user) {
+      console.error("No authenticated user found")
+      return []
+    }
+
+    // Get user document from Firestore
+    const userDocRef = doc(db, "users", user.uid)
+    const userDoc = await getDoc(userDocRef)
+
+    if (!userDoc.exists()) {
+      console.error("User document not found")
+      return []
+    }
+
+    // Get linked machines from user document
+    const userData = userDoc.data()
+    const linkedMachines = userData.linkedMachines || []
+    
+    return Array.isArray(linkedMachines) ? linkedMachines : []
+  } catch (error) {
+    console.error("Error getting user's linked machines:", error)
+    return []
+  }
+}
 
 // Format date for display
 const formatDate = (timestamp) => {
@@ -45,20 +79,39 @@ const formatDate = (timestamp) => {
   }
 }
 
-// Get all batches with pagination
-export const getBatches = async (pageSize = 6, lastVisible = null) => {
+/**
+ * Get batches only for machines linked to the current user with pagination
+ * @param {number} pageSize - Number of batches to fetch per page
+ * @param {object} lastVisible - Last document from previous query for pagination
+ * @returns {Promise<{batches: Array, lastVisibleDoc: object}>} Batches and last visible document
+ */
+export const getMachineLinkedBatches = async (pageSize = 6, lastVisible = null) => {
   try {
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return empty array
+    if (linkedMachines.length === 0) {
+      return { batches: [], lastVisibleDoc: null }
+    }
+
     let batchesQuery
 
     if (lastVisible) {
       batchesQuery = query(
         collection(db, "batches"),
+        where("machine_id", "in", linkedMachines),
         orderBy("created_at", "desc"),
         startAfter(lastVisible),
         limit(pageSize),
       )
     } else {
-      batchesQuery = query(collection(db, "batches"), orderBy("created_at", "desc"), limit(pageSize))
+      batchesQuery = query(
+        collection(db, "batches"),
+        where("machine_id", "in", linkedMachines),
+        orderBy("created_at", "desc"),
+        limit(pageSize)
+      )
     }
 
     const batchesSnapshot = await getDocs(batchesQuery)
@@ -106,62 +159,59 @@ export const getBatches = async (pageSize = 6, lastVisible = null) => {
 
     return { batches, lastVisibleDoc }
   } catch (error) {
-    console.error("Error getting batches:", error)
+    console.error("Error getting machine-linked batches:", error)
     return { batches: [], lastVisibleDoc: null }
   }
 }
 
-// Get total number of batches (for pagination)
-export const getTotalBatchesCount = async () => {
+/**
+ * Get total number of batches only for machines linked to the current user (for pagination)
+ * @returns {Promise<number>} Total number of batches
+ */
+export const getMachineLinkedTotalBatchesCount = async () => {
   try {
-    const batchesSnapshot = await getDocs(collection(db, "batches"))
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return 0
+    if (linkedMachines.length === 0) {
+      return 0
+    }
+
+    const batchesQuery = query(
+      collection(db, "batches"),
+      where("machine_id", "in", linkedMachines)
+    )
+    
+    const batchesSnapshot = await getDocs(batchesQuery)
     return batchesSnapshot.size
   } catch (error) {
-    console.error("Error getting total batches count:", error)
+    console.error("Error getting total machine-linked batches count:", error)
     return 0
   }
 }
 
-// Get a single batch by ID
-export const getBatchById = async (batchId) => {
+/**
+ * Get a single batch by batch number, only if it belongs to a machine linked to the current user
+ * @param {string} batchNumber - Batch number to fetch
+ * @returns {Promise<object|null>} Batch data or null if not found or not authorized
+ */
+export const getMachineLinkedBatchByNumber = async (batchNumber) => {
   try {
-    const batchDoc = await getDoc(doc(db, "batches", batchId))
-
-    if (!batchDoc.exists()) {
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return null
+    if (linkedMachines.length === 0) {
       return null
     }
 
-    const data = batchDoc.data()
-    const created = formatDate(data.created_at)
-    const updated = formatDate(data.updated_at)
-
-    return {
-      id: batchDoc.id,
-      batchNumber: data.batch_number,
-      timestamp: created.shortDate,
-      time: created.time,
-      defectCounts: data.defect_counts,
-      totalDefects: data.total_count || 0,
-      uniqueDefectTypes: Object.keys(data.defect_counts || {}).filter(
-        (key) => key !== "good" && data.defect_counts[key] > 0,
-      ).length,
-      timeRange: `${created.time} - ${updated.time}`,
-      fromDate: created.fullDate,
-      toDate: updated.fullDate,
-      machineId: data.machine_id,
-      status: data.status,
-      rawData: data,
-    }
-  } catch (error) {
-    console.error("Error getting batch:", error)
-    return null
-  }
-}
-
-// Get a single batch by batch number
-export const getBatchByNumber = async (batchNumber) => {
-  try {
-    const batchesQuery = query(collection(db, "batches"), where("batch_number", "==", batchNumber), limit(1))
+    const batchesQuery = query(
+      collection(db, "batches"),
+      where("batch_number", "==", batchNumber),
+      where("machine_id", "in", linkedMachines),
+      limit(1)
+    )
 
     const batchesSnapshot = await getDocs(batchesQuery)
 
@@ -208,15 +258,34 @@ export const getBatchByNumber = async (batchNumber) => {
       rawData: data,
     }
   } catch (error) {
-    console.error("Error getting batch by number:", error)
+    console.error("Error getting machine-linked batch by number:", error)
     return null
   }
 }
 
-// Set up real-time listener for batches
-export const subscribeToBatches = (pageSize = 6, callback) => {
+/**
+ * Set up real-time listener for batches only for machines linked to the current user
+ * @param {number} pageSize - Number of batches to fetch per page
+ * @param {function} callback - Callback function to handle batches data
+ * @returns {function} Unsubscribe function
+ */
+export const subscribeToMachineLinkedBatches = async (pageSize = 6, callback) => {
   try {
-    const batchesQuery = query(collection(db, "batches"), orderBy("created_at", "desc"), limit(pageSize))
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return empty array via callback
+    if (linkedMachines.length === 0) {
+      callback([])
+      return () => {} // Return empty unsubscribe function
+    }
+
+    const batchesQuery = query(
+      collection(db, "batches"),
+      where("machine_id", "in", linkedMachines),
+      orderBy("created_at", "desc"),
+      limit(pageSize)
+    )
 
     return onSnapshot(batchesQuery, (snapshot) => {
       const batches = snapshot.docs.map((doc) => {
@@ -262,15 +331,36 @@ export const subscribeToBatches = (pageSize = 6, callback) => {
       callback(batches)
     })
   } catch (error) {
-    console.error("Error setting up batches subscription:", error)
+    console.error("Error setting up machine-linked batches subscription:", error)
+    callback([])
     return () => {} // Return empty unsubscribe function
   }
 }
 
-// Get overview data for all batches
-export const getBatchesOverview = async () => {
+/**
+ * Get overview data for batches only for machines linked to the current user
+ * @returns {Promise<object>} Overview data
+ */
+export const getMachineLinkedBatchesOverview = async () => {
   try {
-    const batchesSnapshot = await getDocs(collection(db, "batches"))
+    // Get user's linked machines
+    const linkedMachines = await getUserLinkedMachines()
+    
+    // If no linked machines, return default overview
+    if (linkedMachines.length === 0) {
+      return {
+        totalDefects: 0,
+        uniqueDefectTypes: 0,
+        timeRange: "N/A",
+      }
+    }
+
+    const batchesQuery = query(
+      collection(db, "batches"),
+      where("machine_id", "in", linkedMachines)
+    )
+    
+    const batchesSnapshot = await getDocs(batchesQuery)
 
     let totalDefects = 0
     const defectTypes = new Set()
@@ -326,7 +416,7 @@ export const getBatchesOverview = async () => {
       timeRange,
     }
   } catch (error) {
-    console.error("Error getting batches overview:", error)
+    console.error("Error getting machine-linked batches overview:", error)
     return {
       totalDefects: 0,
       uniqueDefectTypes: 0,
@@ -334,4 +424,3 @@ export const getBatchesOverview = async () => {
     }
   }
 }
-

@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # IoT Backend - Development
+  iot-backend-dev:
+    build:
+      context: ./iot-backend
+      dockerfile: Dockerfile
+    container_name: iot-backend-dev
+    ports:
+      - "8001:8001"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ARDUINO_PORT=COM4
+    volumes:
+      - ./iot-backend:/app
+      - /app/__pycache__
+    devices:
+      - /dev/ttyS4:/dev/ttyACM0  # Map COM4 to Linux device
+    privileged: true
+    restart: unless-stopped
+    networks:
+      - megg-dev-network
+
+  # AI Backend - Development  
+  ai-backend-dev:
+    build:
+      context: ./ai-inference-backend
+      dockerfile: Dockerfile
+    container_name: ai-backend-dev
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MODEL_PATH=/app/models/egg_resnet50_keras2.h5
+    volumes:
+      - ./ai-inference-backend:/app
+      - /app/__pycache__
+      - ./ai-inference-backend/models:/app/models
+    restart: unless-stopped
+    networks:
+      - megg-dev-network
+
+  # Kiosk Frontend - Development (Simplified)
+  kiosk-frontend-dev:
+    image: node:18-alpine
+    container_name: kiosk-frontend-dev
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./kiosk-next-frontend:/app
+    command: sh -c "npm install && npm run dev"
+    restart: unless-stopped
+    networks:
+      - megg-dev-network
+
+networks:
+  megg-dev-network:
+    driver: bridge

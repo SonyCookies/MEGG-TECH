@@ -5,19 +5,20 @@ import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, getDoc } 
 // Get all notifications for the current user
 export async function GET(request) {
   try {
-    // Get the current user
-    const user = auth.currentUser
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Get the user ID from the URL query parameters
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get("userId")
+    
+    if (!userId) {
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
     // Get the limit from the URL query parameters
-    const { searchParams } = new URL(request.url)
     const limitParam = searchParams.get("limit")
     const limitCount = limitParam ? Number.parseInt(limitParam, 10) : 10
 
     // Modified query to avoid requiring the composite index
-    const q = query(collection(db, "notifications"), where("userId", "==", user.uid))
+    const q = query(collection(db, "notifications"), where("userId", "==", userId))
 
     const querySnapshot = await getDocs(q)
     let notifications = []
@@ -54,18 +55,16 @@ export async function GET(request) {
 // Mark a notification as read
 export async function PUT(request) {
   try {
-    // Get the current user
-    const user = auth.currentUser
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    // Get the user ID from the request body
+    const { userId, notificationId, markAll } = await request.json()
 
-    // Get the notification ID from the request body
-    const { notificationId, markAll } = await request.json()
+    if (!userId) {
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
+    }
 
     if (markAll) {
       // Mark all notifications as read
-      const q = query(collection(db, "notifications"), where("userId", "==", user.uid), where("read", "==", false))
+      const q = query(collection(db, "notifications"), where("userId", "==", userId), where("read", "==", false))
 
       const querySnapshot = await getDocs(q)
 
@@ -88,7 +87,7 @@ export async function PUT(request) {
       }
 
       const notificationData = notificationSnap.data()
-      if (notificationData.userId !== user.uid) {
+      if (notificationData.userId !== userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
       }
 
@@ -106,15 +105,14 @@ export async function PUT(request) {
 // Delete a notification
 export async function DELETE(request) {
   try {
-    // Get the current user
-    const user = auth.currentUser
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get the notification ID from the URL query parameters
+    // Get the user ID and notification ID from the URL query parameters
     const { searchParams } = new URL(request.url)
+    const userId = searchParams.get("userId")
     const notificationId = searchParams.get("id")
+
+    if (!userId) {
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
+    }
 
     if (!notificationId) {
       return NextResponse.json({ error: "Notification ID is required" }, { status: 400 })
@@ -130,7 +128,7 @@ export async function DELETE(request) {
 
     // Verify the notification belongs to the current user
     const notificationData = notificationSnap.data()
-    if (notificationData.userId !== user.uid) {
+    if (notificationData.userId !== userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

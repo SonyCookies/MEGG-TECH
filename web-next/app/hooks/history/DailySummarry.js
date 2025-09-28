@@ -1,10 +1,8 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import {
-  getTodayDefects,
-  getPreviousDayDefects,
-  getWeekDefects,
+  getMachineLinkedTodayDefects,
+  getMachineLinkedPreviousDayDefects,
+  getMachineLinkedWeekDefects,
   calculateDailyAverage,
   findPeakTime,
   getHourlyDistribution,
@@ -12,110 +10,72 @@ import {
   calculatePercentageChange,
 } from "../../lib/history/DailySummarry"
 
-export function useDefectData() {
+export function useMachineLinkedDefectData() {
+  const [periodTotal, setPeriodTotal] = useState(0)
+  const [dailyAverage, setDailyAverage] = useState(0)
+  const [peakTime, setPeakTime] = useState("N/A")
+  const [percentageChange, setPercentageChange] = useState(0)
+  const [hourlyDistribution, setHourlyDistribution] = useState([])
+  const [defectCounts, setDefectCounts] = useState({ dirty: 0, cracked: 0, good: 0 })
+  const [lastUpdated, setLastUpdated] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [data, setData] = useState({
-    todayDefects: [],
-    previousDayDefects: [],
-    periodTotal: 0,
-    dailyAverage: 0,
-    peakTime: "N/A",
-    percentageChange: 0,
-    hourlyDistribution: [],
-    defectCounts: { dirty: 0, cracked: 0, good: 0 },
-    lastUpdated: null,
-  })
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true)
-
-        // Fetch defect data
-        const [todayDefects, previousDayDefects, weekDefects] = await Promise.all([
-          getTodayDefects(),
-          getPreviousDayDefects(),
-          getWeekDefects(),
-        ])
-
-        // Calculate metrics
-        const periodTotal = todayDefects.length
-        const dailyAverage = calculateDailyAverage(weekDefects)
-        const peakTime = findPeakTime(weekDefects)
-        const percentageChange = calculatePercentageChange(todayDefects.length, previousDayDefects.length)
-        const hourlyDistribution = getHourlyDistribution(weekDefects)
-        const defectCounts = getDefectCounts(weekDefects)
-
-        // Get last updated time
-        const lastUpdated = new Date()
-
-        setData({
-          todayDefects,
-          previousDayDefects,
-          weekDefects,
-          periodTotal,
-          dailyAverage,
-          peakTime,
-          percentageChange,
-          hourlyDistribution,
-          defectCounts,
-          lastUpdated,
-        })
-      } catch (err) {
-        console.error("Error fetching defect data:", err)
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
-
-  // Function to refresh data
-  const refreshData = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true)
+      setError(null)
 
-      // Fetch defect data
-      const [todayDefects, previousDayDefects, weekDefects] = await Promise.all([
-        getTodayDefects(),
-        getPreviousDayDefects(),
-        getWeekDefects(),
-      ])
+      // Get defects for today, yesterday, and last week
+      const todayDefects = await getMachineLinkedTodayDefects()
+      const yesterdayDefects = await getMachineLinkedPreviousDayDefects()
+      const weekDefects = await getMachineLinkedWeekDefects()
 
       // Calculate metrics
-      const periodTotal = todayDefects.length
-      const dailyAverage = calculateDailyAverage(weekDefects)
-      const peakTime = findPeakTime(weekDefects)
-      const percentageChange = calculatePercentageChange(todayDefects.length, previousDayDefects.length)
-      const hourlyDistribution = getHourlyDistribution(weekDefects)
-      const defectCounts = getDefectCounts(weekDefects)
+      const todayTotal = todayDefects.length
+      const yesterdayTotal = yesterdayDefects.length
+      const average = calculateDailyAverage(weekDefects)
+      const peak = findPeakTime(weekDefects)
+      const hourlyData = getHourlyDistribution(weekDefects)
+      const counts = getDefectCounts(weekDefects)
+      const change = calculatePercentageChange(todayTotal, yesterdayTotal)
 
-      // Get last updated time
-      const lastUpdated = new Date()
-
-      setData({
-        todayDefects,
-        previousDayDefects,
-        weekDefects,
-        periodTotal,
-        dailyAverage,
-        peakTime,
-        percentageChange,
-        hourlyDistribution,
-        defectCounts,
-        lastUpdated,
-      })
+      // Update state
+      setPeriodTotal(todayTotal)
+      setDailyAverage(average)
+      setPeakTime(peak)
+      setPercentageChange(change)
+      setHourlyDistribution(hourlyData)
+      setDefectCounts(counts)
+      setLastUpdated(new Date())
     } catch (err) {
-      console.error("Error refreshing defect data:", err)
+      console.error("Error fetching defect data:", err)
       setError(err.message)
     } finally {
       setLoading(false)
     }
   }
 
-  return { ...data, loading, error, refreshData }
-}
+  // Fetch data on component mount
+  useEffect(() => {
+    fetchData()
+  }, [])
 
+  // Function to manually refresh data
+  const refreshData = () => {
+    fetchData()
+  }
+
+  return {
+    periodTotal,
+    dailyAverage,
+    peakTime,
+    percentageChange,
+    hourlyDistribution,
+    defectCounts,
+    lastUpdated,
+    loading,
+    error,
+    refreshData,
+  }
+}

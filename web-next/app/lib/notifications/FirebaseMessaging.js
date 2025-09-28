@@ -1,6 +1,7 @@
 import { getToken, onMessage, isSupported } from "firebase/messaging"
 import { doc, setDoc } from "firebase/firestore"
 import { auth, db } from "../../config/firebaseConfig"
+import { getCurrentUser } from "../../utils/auth-utils"
 
 // FCM Vapid Key from your Firebase console
 const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY
@@ -10,16 +11,33 @@ let messaging = null
 
 // Check if FCM is supported in this browser
 export const isFCMSupported = async () => {
-  return await isSupported()
+  try {
+    return await isSupported()
+  } catch (error) {
+    console.error("Error checking FCM support:", error)
+    return false
+  }
 }
 
 // Initialize messaging if it hasn't been initialized yet
 const initializeMessaging = async () => {
   try {
+    // Check if we're in a browser environment
+    if (typeof window === "undefined") {
+      console.log("Not in browser environment, skipping messaging initialization")
+      return false
+    }
+
     // Check if FCM is supported
     const fcmSupported = await isFCMSupported()
     if (!fcmSupported) {
       console.log("Firebase Cloud Messaging is not supported in this browser")
+      return false
+    }
+
+    // Check if VAPID key is available
+    if (!vapidKey) {
+      console.log("VAPID key is not configured, using browser notifications only")
       return false
     }
 
@@ -34,6 +52,7 @@ const initializeMessaging = async () => {
       if (!messaging) {
         const { getMessaging: getMessagingImport } = await import("firebase/messaging")
         messaging = getMessagingImport(app)
+        console.log("Firebase messaging initialized successfully")
       }
 
       return true
@@ -50,53 +69,67 @@ const initializeMessaging = async () => {
 // Request permission and get FCM token
 export const requestNotificationPermission = async () => {
   try {
-    const initialized = await initializeMessaging()
-    if (!initialized) {
-      // If FCM initialization fails, we can still use browser notifications
-      const permission = await Notification.requestPermission()
-      return permission === "granted"
+    console.log("Requesting notification permission...")
+    
+    // Check if we're in a browser environment
+    if (typeof window === "undefined") {
+      console.log("Not in browser environment")
+      return false
     }
 
-    // Request permission
+    // Check if Notification API is supported
+    if (!("Notification" in window)) {
+      console.log("Notification API not supported")
+      return false
+    }
+
+    // Request permission first
     const permission = await Notification.requestPermission()
+    console.log("Notification permission result:", permission)
+    
     if (permission !== "granted") {
       console.log("Notification permission denied")
       return false
     }
 
-    // Get FCM token
+    // Try to initialize FCM (optional enhancement)
     try {
-      const currentToken = await getToken(messaging, { vapidKey })
+      const initialized = await initializeMessaging()
+      if (initialized) {
+        // Get FCM token
+        try {
+          console.log("Getting FCM token...")
+          const currentToken = await getToken(messaging, { vapidKey })
 
-      if (currentToken) {
-        console.log("FCM Token:", currentToken)
+          if (currentToken) {
+            console.log("FCM Token obtained successfully")
 
-        // Save the token to Firestore
-        const user = auth.currentUser
-        if (user) {
-          await saveTokenToFirestore(currentToken, user.uid)
+            // Save the token to Firestore
+            const user = getCurrentUser()
+            if (user) {
+              await saveTokenToFirestore(currentToken, user.uid)
+            }
+          } else {
+            console.log("No registration token available")
+          }
+        } catch (tokenError) {
+          console.error("Error getting FCM token:", tokenError)
+          console.log("FCM failed, but browser notifications will still work")
+          // Continue with browser notifications even if FCM fails
         }
-
-        return true
       } else {
-        console.log("No registration token available")
-        return false
+        console.log("FCM initialization failed, using browser notifications only")
       }
-    } catch (tokenError) {
-      console.error("Error getting FCM token:", tokenError)
-      // Even if we can't get an FCM token, we can still use browser notifications
-      return permission === "granted"
+    } catch (fcmError) {
+      console.error("FCM error:", fcmError)
+      console.log("FCM failed, but browser notifications will still work")
+      // Continue with browser notifications even if FCM fails
     }
+
+    return true // Return true since we have browser notification permission
   } catch (error) {
     console.error("Error requesting notification permission:", error)
-    // Try to get browser notification permission as a fallback
-    try {
-      const permission = await Notification.requestPermission()
-      return permission === "granted"
-    } catch (permError) {
-      console.error("Error requesting browser notification permission:", permError)
-      return false
-    }
+    return false
   }
 }
 
@@ -123,34 +156,82 @@ const saveTokenToFirestore = async (token, userId) => {
 
 // Set up foreground message handler
 export const setupForegroundMessageHandler = async () => {
-  const initialized = await initializeMessaging()
-  if (!initialized || !messaging) return
-
-  onMessage(messaging, (payload) => {
-    console.log("Message received in the foreground:", payload)
-
-    // Display the notification using the Notification API
-    if (payload.notification) {
-      const { title, body } = payload.notification
-
-      new Notification(title || "Notification", {
-        body: body || "You have a new notification",
-        icon: "/logo.png",
-      })
+  try {
+    const initialized = await initializeMessaging()
+    if (!initialized || !messaging) {
+      console.log("Cannot setup foreground handler - messaging not initialized")
+      return
     }
-  })
+
+    onMessage(messaging, (payload) => {
+      console.log("Message received in the foreground:", payload)
+
+      // Display the notification using the Notification API
+      if (payload.notification) {
+        const { title, body } = payload.notification
+
+        new Notification(title || "MEGG TECH", {
+          body: body || "You have a new notification",
+          icon: "/logo.png",
+          badge: "/badge.png",
+        })
+      }
+    })
+
+    console.log("Foreground message handler setup successfully")
+  } catch (error) {
+    console.error("Error setting up foreground message handler:", error)
+  }
 }
 
 // Show a welcome notification directly from the browser
 const showWelcomeNotification = () => {
-  if (Notification.permission === "granted") {
-    new Notification("Welcome to MEGG TECH", {
-      body: "You will now receive notifications",
-      icon: "/logo.png",
-    })
-    return true
+  try {
+    console.log("Attempting to show welcome notification...")
+    console.log("Notification permission:", Notification.permission)
+    
+    if (Notification.permission === "granted") {
+      console.log("Creating welcome notification...")
+      
+      const notification = new Notification("Welcome to MEGG TECH", {
+        body: "You will now receive notifications for important updates",
+        icon: "/logo.png",
+        badge: "/badge.png",
+        tag: "welcome-notification",
+        requireInteraction: true, // Keep notification visible until user interacts
+        silent: false, // Play notification sound
+      })
+      
+      console.log("Welcome notification created:", notification)
+      
+      // Add event listeners to track notification behavior
+      notification.onclick = () => {
+        console.log("Welcome notification clicked")
+        notification.close()
+        window.focus()
+      }
+      
+      notification.onshow = () => {
+        console.log("Welcome notification shown")
+      }
+      
+      notification.onerror = (error) => {
+        console.error("Welcome notification error:", error)
+      }
+      
+      notification.onclose = () => {
+        console.log("Welcome notification closed")
+      }
+      
+      return true
+    } else {
+      console.log("Notification permission not granted:", Notification.permission)
+      return false
+    }
+  } catch (error) {
+    console.error("Error showing welcome notification:", error)
+    return false
   }
-  return false
 }
 
 // Send welcome notification when push notifications are enabled
@@ -158,12 +239,42 @@ export const sendWelcomeNotification = async (userId) => {
   try {
     console.log("Sending welcome notification for user:", userId)
 
-    // First, show a local notification
-    showWelcomeNotification()
+    // Always show a local notification first (this works regardless of Firebase)
+    console.log("Showing immediate welcome notification...")
+    const localNotificationShown = showWelcomeNotification()
+    console.log("Local notification result:", localNotificationShown)
 
-    // Then, try to call the API to send a server-side notification
+    // Show a second notification to ensure it appears
+    setTimeout(() => {
+      try {
+        console.log("Showing second welcome notification...")
+        const secondNotification = new Notification("MEGG TECH Notifications Enabled", {
+          body: "You will now receive alerts for defects and machine activity",
+          icon: "/logo.png",
+          badge: "/badge.png",
+          tag: "second-welcome-notification",
+          requireInteraction: true, // This makes it stay until clicked
+          silent: false,
+        })
+        
+        secondNotification.onclick = () => {
+          console.log("Second welcome notification clicked")
+          secondNotification.close()
+          window.focus()
+        }
+        
+        secondNotification.onshow = () => {
+          console.log("Second welcome notification shown")
+        }
+        
+        console.log("Second welcome notification created")
+      } catch (error) {
+        console.error("Error creating second notification:", error)
+      }
+    }, 1000)
+
+    // Try to call the API to send a server-side notification (optional)
     try {
-      // Try the simpler API route first
       const response = await fetch("/api/notifications/send-welcome", {
         method: "POST",
         headers: {
@@ -172,38 +283,22 @@ export const sendWelcomeNotification = async (userId) => {
         body: JSON.stringify({ userId }),
       })
 
-      if (!response.ok) {
-        console.warn("Simple API route failed, trying update-notification-settings")
-
-        // If that fails, try the original API route
-        const fallbackResponse = await fetch("/api/notifications/update-notification-settings", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userId,
-            pushNotificationsEnabled: true,
-          }),
-        })
-
-        if (!fallbackResponse.ok) {
-          console.warn("Both API routes failed, but local notification was shown")
-        }
+      if (response.ok) {
+        console.log("Welcome notification API call successful")
+      } else {
+        console.warn("Welcome notification API call failed, but local notifications were shown")
       }
     } catch (apiError) {
       console.error("API call error:", apiError)
-      console.log("Local notification was shown")
+      console.log("Local notifications were shown successfully")
     }
 
-    return true // Return true as long as we showed a notification locally
+    return localNotificationShown
   } catch (error) {
     console.error("Error sending welcome notification:", error)
 
     // Try to show a local notification as a last resort
-    showWelcomeNotification()
-
-    return false
+    return showWelcomeNotification()
   }
 }
 

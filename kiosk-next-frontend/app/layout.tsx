@@ -1,5 +1,5 @@
 import { NetworkProvider } from "./contexts/NetworkContext"
-import { CameraProvider } from "./contexts/CameraContext"
+// import { CameraProvider } from "./contexts/CameraContext" // Removed during cleanup
 import { Poppins } from "next/font/google"
 import "./globals.css"
 import type { ReactNode } from "react"
@@ -22,9 +22,12 @@ interface RootLayoutProps {
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
+      <head>
+        <script src="https://cdn.tailwindcss.com"></script>
+      </head>
       <body className={poppins.className}>
         <NetworkProvider>
-          <CameraProvider>{children}</CameraProvider>
+          {children}
         </NetworkProvider>
       </body>
     </html>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { getDailyDefectData, getMonthlyDefectData } from "../../../../lib/api"
+import { getMachineLinkedDailyDefectData, getMachineLinkedMonthlyDefectData } from "../../../../lib/overview/defect/EggDefectChart"
 
 export function EggDefectsChart({ timeFrame }) {
   const [hoverData, setHoverData] = useState(null)
@@ -34,9 +34,11 @@ export function EggDefectsChart({ timeFrame }) {
         let fetchedData = []
 
         try {
-          fetchedData = timeFrame === "daily" ? await getDailyDefectData() : await getMonthlyDefectData()
+          fetchedData = timeFrame === "daily" 
+            ? await getMachineLinkedDailyDefectData() 
+            : await getMachineLinkedMonthlyDefectData()
         } catch (err) {
-          console.error("Error fetching data:", err)
+          console.error("Error fetching machine-linked data:", err)
           // Provide fallback data if API fails
           fetchedData =
             timeFrame === "daily"
@@ -79,7 +81,7 @@ export function EggDefectsChart({ timeFrame }) {
         setTimeout(() => setIsVisible(true), 100)
       } catch (err) {
         console.error("Error in fetchData:", err)
-        setError("Failed to load defect data")
+        setError("Failed to load defect data for your linked machines")
         setLoading(false)
       }
     }
@@ -171,15 +173,18 @@ export function EggDefectsChart({ timeFrame }) {
   if (error) {
     return (
       <div className="relative w-full h-[300px] flex items-center justify-center">
-        <div className="text-red-500">{error}</div>
+        <div className="text-red-500 text-center">{error}</div>
       </div>
     )
   }
 
-  if (data.length === 0) {
+  if (data.length === 0 || data.every(item => 
+    (item.cracks + item.good + item.dirty + item.bloodSpots + item.other) === 0)) {
     return (
       <div className="relative w-full h-[300px] flex items-center justify-center">
-        <div className="text-gray-500">No data available</div>
+        <div className="text-gray-500 text-center px-4">
+          No defect data available for your linked machines
+        </div>
       </div>
     )
   }
@@ -319,4 +324,3 @@ export function EggDefectsChart({ timeFrame }) {
     </div>
   )
 }
-

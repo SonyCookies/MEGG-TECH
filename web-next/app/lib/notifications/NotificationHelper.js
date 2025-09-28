@@ -1,9 +1,10 @@
 import { auth } from "../../config/firebaseConfig"
+import { getCurrentUser } from "../../utils/auth-utils"
 
 // Function to send a notification to the current user
 export const sendNotificationToUser = async (title, body, data = {}) => {
   try {
-    const user = auth.currentUser
+    const user = getCurrentUser()
     if (!user) {
       throw new Error("User not authenticated")
     }

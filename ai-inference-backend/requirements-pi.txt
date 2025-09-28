@@ -1,0 +1,15 @@
+# Raspberry Pi optimized requirements for AI Inference Backend
+fastapi==0.115.8
+uvicorn==0.34.0
+websockets==14.2
+# Use TensorFlow Lite for Raspberry Pi (much lighter)
+tflite-runtime==2.12.0
+numpy==1.24.3
+pillow==10.0.0
+python-dotenv==1.0.1
+pydantic==2.10.6
+pydantic-settings==2.7.1
+requests==2.32.3
+opencv-python-headless==4.8.1.78
+
+

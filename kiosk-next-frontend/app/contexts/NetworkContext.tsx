@@ -5,7 +5,7 @@
 
 import type React from "react"
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react"
-import { syncData } from "../libs/sync"
+// import { syncData } from "../libs/sync" // Removed during cleanup
 
 // ==========================================
 // Types
@@ -34,50 +34,16 @@ const InternetConnectionContext = createContext<boolean>(true)
 const WebSocketContext = createContext<WebSocketContextType | null>(null)
 
 // ==========================================
-// Sync Lock Management
-// ==========================================
-let isSyncing = false
-let syncScheduled = false
-
-// ==========================================
 // Logger Setup
 // ==========================================
 const createLogger = (context: string) => ({
-  log: (message: string) => console.log(`[${context}] ${new Date().toISOString()}: ${message}`),
+  log: (message: string) => {},
   warn: (message: string) => console.warn(`[${context}] ${new Date().toISOString()}: ${message}`),
   error: (message: string) => console.error(`[${context}] ${new Date().toISOString()}: ${message}`),
 })
 
 const internetLogger = createLogger("InternetConnectionContext")
 const wsLogger = createLogger("WebSocketContext")
-
-// ==========================================
-// Sync Function
-// ==========================================
-const runSyncWithLock = async (): Promise<void> => {
-  if (isSyncing) {
-    internetLogger.log("Sync already in progress, scheduling another sync")
-    syncScheduled = true
-    return
-  }
-
-  try {
-    isSyncing = true
-    internetLogger.log("Starting sync operation")
-    await syncData()
-    internetLogger.log("Sync operation completed")
-  } catch (error) {
-    internetLogger.error(`Error during sync: ${error instanceof Error ? error.message : String(error)}`)
-  } finally {
-    isSyncing = false
-
-    if (syncScheduled) {
-      internetLogger.log("Running scheduled sync")
-      syncScheduled = false
-      runSyncWithLock()
-    }
-  }
-}
 
 // ==========================================
 // Custom Hooks
@@ -179,8 +145,7 @@ export const NetworkProvider = ({ children }: NetworkProviderProps): React.React
       internetLogger.log(`Internet connection status changed to: ${hasInternet ? "online" : "offline"}`)
 
       if (hasInternet && wasOffline) {
-        internetLogger.log("Connection restored, triggering sync")
-        runSyncWithLock()
+        internetLogger.log("Connection restored")
       }
     },
     [checkConnectivity],
@@ -208,6 +173,10 @@ export const NetworkProvider = ({ children }: NetworkProviderProps): React.React
   }, [])
 
   const connectWebSocket = useCallback((): void => {
+    // WebSocket disabled - using direct Roboflow API calls instead
+    setReadyState(WebSocket.CLOSED)
+    return
+
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       return
     }

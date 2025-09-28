@@ -28,7 +28,7 @@
     ".next/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx"
-  ],
+, "app/components/egg-loading.tsx"  ],
   "exclude": [
     "node_modules"
   ]
